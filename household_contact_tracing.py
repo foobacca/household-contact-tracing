@@ -586,7 +586,7 @@ class household_sim_contact_tracing:
                 for node_1 in house_being_isolated_nodes:
                     for node_2 in house_being_traced_nodes:
                         if self.G.has_edge(node_1, node_2) == True:
-                            self.G.edges[node_1, node_2].update({"colour": self.failed_contact_tracing})
+                            self.G.edges[node_1, node_2].update({"colour": self.contact_traced_edge_between_house})
             else:
                 
                 # House which contact traced = None if the case self reports
