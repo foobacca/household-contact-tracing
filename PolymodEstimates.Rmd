@@ -1,0 +1,54 @@
+---
+title: "Estimates from Polymod Data"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+We need to estiamte the following parameters;
+1) What proportion of contacts are within household?
+
+```{r}
+library(socialmixr)
+library(dplyr)
+library(modelr)
+```
+
+We want to do a really simple model of household size and the number of contacts that occur within the household.
+
+```{r}
+data(polymod)
+```
+
+```{r}
+contacts = polymod$contacts
+participants = polymod$participants
+```
+
+```{r}
+# Join the participant data frame to the dataframe that stores contact data on the participant ID and filter to the United Kingdom
+model_data = participants %>%
+  filter(country == "United Kingdom") %>%
+  left_join(contacts, by = "part_id") %>%
+  select(part_id, hh_size, cnt_home, frequency_multi)
+```
+
+By household size.
+
+```{r}
+summary = model_data %>%
+  group_by(hh_size) %>%
+  filter(!is.na(cnt_home)) %>%
+  summarize(prop_within_house = mean(cnt_home), n = n())
+summary
+```
+
+By household.
+
+```{r}
+summary = model_data %>%
+  filter(!is.na(cnt_home)) %>%
+  summarize(prop_within_house = mean(cnt_home),mean = mean(frequency_multi), n = n())
+summary
+```
+
