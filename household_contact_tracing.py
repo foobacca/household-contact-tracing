@@ -371,7 +371,7 @@ class household_sim_contact_tracing:
         # Isolate all non isolated households where the infection has been reported
         [self.isolate_household(self.G.nodes()[node]["household"]) for node in self.G.nodes() if (self.G.nodes()[node]["reporting_time"] == self.time
                                                                                                     and self.G.nodes()[node]["isolated"] == False)]
-
+        
         [self.isolate_household(self.G.nodes[node]["household"]) for node in self.G.nodes() if (self.G.nodes[node]["symptom_onset"] == self.time
                                                                                                 and self.G.nodes[node]["contact_traced"] == True
                                                                                                 and self.G.nodes[node]["isolated"] == False)]
@@ -392,25 +392,45 @@ class household_sim_contact_tracing:
         new_symptomatic = [node for node in self.G.nodes() if (self.G.nodes()[node]["had_contacts_traced"] == False 
                                                                 and self.G.nodes()[node]["symptom_onset"] == self.time 
                                                                 and self.G.nodes()[node]["contact_traced"] == True)]
+
+        households_to_be_traced = [self.G.nodes[node]["household"] for node in (newly_reported + new_symptomatic)]
         
-        to_have_contacts_traced = np.unique(np.array(newly_reported + new_symptomatic))
-        
-        for node in to_have_contacts_traced:
+        # de-duplicating
+        households_to_be_traced = list(set(households_to_be_traced))
+
+        contacts_to_be_traced = 0
+
+        # We work out how many nodes must now have their contacts traced:
+        for house in households_to_be_traced:
             
-            # total contacts to be traced
-            contacts_to_be_traced = self.G.nodes()[node]["outside_house_contacts_made"]
-            total_contacts_to_be_traced = self.contact_tracing_dict["contacts_to_be_traced"] + contacts_to_be_traced
-            self.contact_tracing_dict.update({"contacts_to_be_traced": total_contacts_to_be_traced})
+            # All contacts in house are being traced when the 
+            household_size = self.house_dict[house]["size"]
+
+            for node in range(household_size):
+                contacts_made = self.contacts_made_today(household_size)
             
-            # We assume that some contacts will never be successfully traced
-            possible_to_trace = npr.binomial(contacts_to_be_traced ,self.contact_tracing_success_prob)
-            total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] + possible_to_trace
-            self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
-                                                    
-            # Update the flag so that a nodes contacts are only counted once
-            self.G.nodes()[node].update({"had_contacts_traced": True})
+                # How many of the contacts are within the household
+                within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household_size-1])
+                
+                # Each contact is with a unique individual, so it is not possible to have more than h-1 contacts within household
+                within_household_contacts = min(household_size - 1, within_household_contacts)
+                
+                # Work out how many contacts were with other households
+                # If social distancing is in play, global contacts are reduced by
+                outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
+
+                contacts_to_be_traced += outside_household_contacts
+
+        # update the total contacts to be traced
+        total_contacts_to_be_traced = self.contact_tracing_dict["contacts_to_be_traced"] + contacts_to_be_traced
+        self.contact_tracing_dict.update({"contacts_to_be_traced": total_contacts_to_be_traced})
             
-        # Work out how many were successfully traced today:
+        # Some contacts will never be traced, these are assumed to immediately be removed
+        possible_to_trace = npr.binomial(contacts_to_be_traced, self.contact_tracing_success_prob)
+        total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] + possible_to_trace
+        self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
+            
+        # Work out how many were successfully traced today (this is where the geometric assumption becomes very useful)
         successful_contact_traces = npr.binomial(self.contact_tracing_dict["possible_to_trace_contacts"], self.prob_of_successful_contact_trace_today)
         total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] - successful_contact_traces
         self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
@@ -445,7 +465,7 @@ class household_sim_contact_tracing:
         self.house_dict.update({new_household_number:
                                 { 
                                     "size": house_size,                  # Size of the household
-                                    "time": self.time,                        # The time at which the infection entered the household
+                                    "time": self.time,                   # The time at which the infection entered the household
                                     "susceptibles": house_size - 1,      # How many susceptibles remain in the household
                                     "isolated": False,                   # Has the household been isolated, so there can be no more infections from this household
                                     "contact_traced": False,             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
@@ -456,7 +476,8 @@ class household_sim_contact_tracing:
                                     "spread_to": [],                     # Which households were infected by this household
                                     "nodes": [],                         # The ID of currently infected nodes in the household
                                     "infected_by_node": infected_by_node,# Which node infected the household
-                                    "within_house_edges": []             # Which edges are contained within the household
+                                    "within_house_edges": [],            # Which edges are contained within the household
+                                    "had_contacts_traced": False         # Have the nodes inside the household had their contacts traced?
                                 }
                             })
 
