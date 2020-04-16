@@ -372,16 +372,16 @@ class household_sim_contact_tracing:
         [self.isolate_household(self.G.nodes()[node]["household"]) for node in self.G.nodes() if (self.G.nodes()[node]["reporting_time"] == self.time
                                                                                                     and self.G.nodes()[node]["isolated"] == False)]
 
-        [self.isolate_household(self.G.nodes[node]["household"]) for node in self.G.nodes() if (self.G.nodes[node]["symptom_onset"] <= self.time
+        [self.isolate_household(self.G.nodes[node]["household"]) for node in self.G.nodes() if (self.G.nodes[node]["symptom_onset"] == self.time
                                                                                                 and self.G.nodes[node]["contact_traced"] == True
                                                                                                 and self.G.nodes[node]["isolated"] == False)]
         
         # While there are households who have been contact traced but not isolated
         # TODO: make this code easier to read, split into functions?
-        while [house for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] == self.time 
+        while [house for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
                                                       and self.house_dict[house]["contact_traced"] == False)] != []:
             # Contact trace the households
-            [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] == self.time 
+            [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
                                                                                   and self.house_dict[house]["contact_traced"] == False)]
         
         # The following chunk of code is to record counts of how many contacts must be traced, used for evaluating when capacity is reached
@@ -514,15 +514,15 @@ class household_sim_contact_tracing:
         house_which_contact_traced = self.house_dict[household_number]["being_contact_traced_from"]
         
         # Initially the edge is assigned the contact tracing colour, may be updated if the contact tracing does not succeed
-        if house_which_contact_traced != None:
+        # if house_which_contact_traced != None:
 
-            house_which_contact_traced_nodes = self.house_dict[house_which_contact_traced]["nodes"]
-            house_being_isolated_nodes = self.house_dict[household_number]["nodes"]
+        #     house_which_contact_traced_nodes = self.house_dict[house_which_contact_traced]["nodes"]
+        #     house_being_isolated_nodes = self.house_dict[household_number]["nodes"]
         
-            for node_1 in house_which_contact_traced_nodes:
-                for node_2 in house_being_isolated_nodes:
-                    if self.G.has_edge(node_1, node_2) == True:
-                        self.G.edges[node_1, node_2].update({"colour": self.contact_traced_edge_between_house})
+        #     for node_1 in house_which_contact_traced_nodes:
+        #         for node_2 in house_being_isolated_nodes:
+        #             if self.G.has_edge(node_1, node_2) == True:
+        #                 self.G.edges[node_1, node_2].update({"colour": self.contact_traced_edge_between_house})
         
         # Contact tracing attempted for the household that infected the household currently being isolated
         infected_by = self.house_dict[household_number]["infected_by"]
