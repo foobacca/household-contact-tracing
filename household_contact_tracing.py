@@ -407,19 +407,20 @@ class household_sim_contact_tracing:
             household_size = self.house_dict[house]["size"]
 
             for node in range(household_size):
-                contacts_made = self.contacts_made_today(household_size)
-            
-                # How many of the contacts are within the household
-                within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household_size-1])
+                for _ in range(14):
+                    contacts_made = self.contacts_made_today(household_size)
                 
-                # Each contact is with a unique individual, so it is not possible to have more than h-1 contacts within household
-                within_household_contacts = min(household_size - 1, within_household_contacts)
-                
-                # Work out how many contacts were with other households
-                # If social distancing is in play, global contacts are reduced by
-                outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
+                    # How many of the contacts are within the household
+                    within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household_size-1])
+                    
+                    # Each contact is with a unique individual, so it is not possible to have more than h-1 contacts within household
+                    within_household_contacts = min(household_size - 1, within_household_contacts)
+                    
+                    # Work out how many contacts were with other households
+                    # If social distancing is in play, global contacts are reduced by
+                    outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
 
-                contacts_to_be_traced += outside_household_contacts
+                    contacts_to_be_traced += outside_household_contacts
 
         # update the total contacts to be traced
         total_contacts_to_be_traced = self.contact_tracing_dict["contacts_to_be_traced"] + contacts_to_be_traced
