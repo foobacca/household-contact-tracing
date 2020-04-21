@@ -262,7 +262,7 @@ class household_sim_contact_tracing:
         nodes_in_house.append(node_count)
         household_dict[household].update({'nodes': nodes_in_house})
 
-    def increment_infection(self, node_count, house_count):
+    def increment_infection(self, node_count):
         """
         Creates a new days worth of infections
         """
@@ -345,7 +345,7 @@ class household_sim_contact_tracing:
                     # We assume all new outside household infections are in a new household
                     # i.e: You do not infect 2 people in a new household
                     # you do not spread the infection to a household that already has an infection
-                    house_count += 1
+                    self.house_count += 1
                     node_count += 1
 
                     # We record which node caused this infection
@@ -355,11 +355,11 @@ class household_sim_contact_tracing:
 
                     # We record which house spread to which other house
                     spread_to = self.house_dict[node_household]["spread_to"]
-                    spread_to = spread_to.append(house_count)
+                    spread_to = spread_to.append(self.house_count)
 
                     # Create a new household, since the infection was outside the household
-                    self.new_household(house_count, self.house_dict[node_household]["generation"] + 1, self.G.nodes()[node]["household"], node)
-                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, house_count, self.house_dict, days_since_infected)
+                    self.new_household(self.house_count, self.house_dict[node_household]["generation"] + 1, self.G.nodes()[node]["household"], node)
+                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, self.house_count, self.house_dict, days_since_infected)
 
                     # Add the edge to the graph and give it the default colour
                     self.G.add_edge(node, node_count)
@@ -624,6 +624,19 @@ class household_sim_contact_tracing:
                 for edge in self.house_dict[household_number]["within_house_edges"]
         ]
 
+
+    def simulate_one_day(self):
+        """Simulates one day of the epidemic and contact tracing.
+
+        Useful for bug testing and visualisation.
+        """
+        node_count = nx.number_of_nodes(self.G)
+        self.increment_infection(node_count)
+        if self.contact_trace == True:
+            self.increment_contact_tracing()
+        self.perform_recoveries()
+        self.time += 1
+
     def run_simulation_hitting_times(self, time_out):
         self.time = 1
 
@@ -647,8 +660,8 @@ class household_sim_contact_tracing:
         self.G = nx.Graph()
 
         # Create first household
-        house_count = 1
-        self.new_household(house_count, 0, None, None)
+        self.house_count = 1
+        self.new_household(self.house_count, 0, None, None)
 
         # Initial values
         node_count = 1
@@ -663,7 +676,7 @@ class household_sim_contact_tracing:
         self.timed_out = False  # flag for whether the simulation reached it's time limit without another stop condition being met
 
         # Starting nodes/generation
-        self.new_infection(node_count, generation, house_count, self.house_dict)
+        self.new_infection(node_count, generation, self.house_count, self.house_dict)
 
         # While loop ends when there are no non-isolated infections
         currently_infecting = len([node for node in self.G.nodes() if self.G.nodes()[node]["isolated"] == False])
@@ -672,12 +685,9 @@ class household_sim_contact_tracing:
 
             # This chunk of code executes a days worth on infections and contact tracings
             node_count = nx.number_of_nodes(self.G)
-            self.increment_infection(node_count, house_count)
-            if self.contact_trace == True:
-                self.increment_contact_tracing()
-            self.perform_recoveries()
-            house_count = len(self.house_dict)
-            self.time += 1
+            self.simulate_one_day()
+
+            self.house_count = len(self.house_dict)
             total_cases.append(node_count)
 
             # While loop ends when there are no non-isolated infections
@@ -725,8 +735,8 @@ class household_sim_contact_tracing:
         self.G = nx.Graph()
 
         # Create first household
-        house_count = 1
-        self.new_household(house_count, 0, None, None)
+        self.house_count = 1
+        self.new_household(self.house_count, 0, None, None)
 
         # Initial values
         node_count = 0
@@ -735,7 +745,7 @@ class household_sim_contact_tracing:
         self.extinct = False
 
         # Starting nodes/generation
-        self.new_infection(node_count, generation, house_count, self.house_dict)
+        self.new_infection(node_count, generation, self.house_count, self.house_dict)
         node_count += 1
 
         # While loop ends when there are no non-isolated infections
@@ -745,12 +755,9 @@ class household_sim_contact_tracing:
 
             # This chunk of code executes a days worth on infections and contact tracings
             node_count = nx.number_of_nodes(self.G)
-            self.increment_infection(node_count, house_count)
-            if self.contact_trace == True:
-                self.increment_contact_tracing()
-            self.perform_recoveries()
-            house_count = len(self.house_dict)
-            self.time += 1
+            self.simulate_one_day()
+
+            self.house_count = len(self.house_dict)
             self.total_cases.append(node_count)
 
             # While loop ends when there are no non-isolated infections
