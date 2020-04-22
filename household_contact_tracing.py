@@ -173,8 +173,11 @@ class household_sim_contact_tracing:
         self.default_edge_colour = "black"
         self.failed_contact_tracing = "red"
 
-    def contact_trace_delay(self):
-        return 1 + npr.negative_binomial(1, self.prob_of_successful_contact_trace_today)
+    def contact_trace_delay(self, app_traced_edge):
+        if app_traced_edge:
+            return 1 
+        else:
+            return 1 + npr.negative_binomial(1, self.prob_of_successful_contact_trace_today)
     
     def incubation_period(self):
         return round(npr.gamma(shape = self.ip_shape, scale = self.ip_scale))
@@ -568,9 +571,20 @@ class household_sim_contact_tracing:
                     self.G.edges[node_1, node_2].update({"colour": new_colour})
 
     def attempt_contact_trace_of_household(self, house_to, house_from, contact_trace_delay=0, trace_neighbours=False):
-        # Determine if the to contact trace has been successful
-        if (npr.binomial(1, self.contact_tracing_success_prob) == 1):
-            contact_trace_delay = contact_trace_delay + self.contact_trace_delay()
+        # Decide if the edge was traced by the app
+        app_traced = self.is_edge_app_traced(self.get_edge_between_household(house_from, house_to))
+
+        # Get the success probability
+        if app_traced:
+            success_prob = 1
+        else:
+            success_prob = self.contact_tracing_success_prob
+
+        # is the trace successful
+        if (npr.binomial(1, success_prob) == 1):
+
+            # work out the time delay
+            contact_trace_delay = contact_trace_delay + self.contact_trace_delay(app_traced)
             proposed_time_until_contact_trace = self.time + contact_trace_delay
 
             # Get the current time until contact trace, and compare against the proposed time until contact trace
