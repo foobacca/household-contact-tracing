@@ -231,7 +231,7 @@ class household_sim_contact_tracing:
             will_report = False
             time_of_reporting = float('Inf')
 
-        # We assign each node a recovery period of 14 days, after 14 days the probability of causing a new infections is 0, due to the generation time distribution
+        # We assign each node a recovery period of 21 days, after 21 days the probability of causing a new infections is 0, due to the generation time distribution
         recovery_time = self.time + 21
 
         # Give the node the required attributes
@@ -638,7 +638,7 @@ class household_sim_contact_tracing:
         self.time += 1
 
     def run_simulation_hitting_times(self, time_out):
-        self.time = 1
+        self.time = 0
 
         # Stores information about the households.
         self.house_dict = {}
@@ -713,7 +713,7 @@ class household_sim_contact_tracing:
         self.inf_counts = total_cases
 
     def run_simulation(self, time_out):
-        self.time = 1
+        self.time = 0
 
         # Stores information about the households.
         self.house_dict = {}
