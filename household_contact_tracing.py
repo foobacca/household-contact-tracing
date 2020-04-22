@@ -180,7 +180,7 @@ class household_sim_contact_tracing:
         return round(npr.gamma(shape = self.ip_shape, scale = self.ip_scale))
 
     def testing_delay(self):
-        return 3
+        return 1
     
     def contacts_made_today(self, household_size):
         """Generates the number of contacts made today by a node, given the house size of the node. Uses an overdispersed negative binomial distribution.
@@ -299,6 +299,19 @@ class household_sim_contact_tracing:
                                 }
                             })
 
+    def get_edge_between_household(self, house_1, house_2):
+        for node_1 in self.house_dict[house_1]["nodes"]:
+            for node_2 in self.house_dict[house_2]["nodes"]:
+                if self.G.has_edge(node_1, node_2):
+                    return (node_1, node_2)
+
+    def is_edge_app_traced(self, edge):
+        """Returns whether both ends of an edge have the app, and the app does the tracing.
+        """
+        node_1_app = self.G.nodes[edge[0]]["has_trace_app"]
+        node_2_app = self.G.nodes[edge[0]]["has_trace_app"]
+        return node_2_app and node_1_app
+
     def increment_infection(self, node_count):
         """
         Creates a new days worth of infections
@@ -414,8 +427,9 @@ class household_sim_contact_tracing:
         For each node that is contact traced
         """
 
-        # The day that someone becomes symptomatic who will report symptoms, we isolate that house
-        # Infection may still spread 
+        # Update the contact traced status for all households that have had the contact tracing process get there
+        [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
+                                                                                and self.house_dict[house]["contact_traced"] == False)]
         
         # Isolate all non isolated households where the infection has been reported
         [self.isolate_household(self.G.nodes()[node]["household"]) for node in self.G.nodes() if (self.G.nodes()[node]["reporting_time"] == self.time
@@ -442,22 +456,16 @@ class household_sim_contact_tracing:
                 and self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] == False
             )]
         
-        # While there are households who have been contact traced but not isolated
-        # TODO: make this code easier to read, split into functions?
-        while [house for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
-                                                      and self.house_dict[house]["contact_traced"] == False)] != []:
-            # Contact trace the households
-            [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
-                                                                                  and self.house_dict[house]["contact_traced"] == False)]
-        
         # The following chunk of code is to record counts of how many contacts must be traced, used for evaluating when capacity is reached
         # Get all the cases that have reported their infection today
-        newly_reported = [node for node in self.G.nodes() if (self.G.nodes()[node]["had_contacts_traced"] == False and self.G.nodes()[node]["reporting_time"] == self.time)]
+        newly_reported = [node for node in self.G.nodes() if (
+            self.G.nodes()[node]["had_contacts_traced"] == False 
+            and self.G.nodes()[node]["reporting_time"] == self.time)
+            ]
         
         # For nodes who have just onset symptoms, but their household has been contact traced, now trace their contacts
         new_symptomatic = [node for node in self.G.nodes() if (self.G.nodes()[node]["had_contacts_traced"] == False 
                                                                 and self.G.nodes()[node]["symptom_onset"] == self.time 
-
                                                                 and self.G.nodes()[node]["contact_traced"] == True)]
 
         households_to_be_traced = [self.G.nodes[node]["household"] for node in (newly_reported + new_symptomatic)]
@@ -558,7 +566,6 @@ class household_sim_contact_tracing:
             for node_2 in self.house_dict[house_from]["nodes"]:
                 if self.G.has_edge(node_1, node_2):
                     self.G.edges[node_1, node_2].update({"colour": new_colour})
-
 
     def attempt_contact_trace_of_household(self, house_to, house_from, contact_trace_delay=0, trace_neighbours=False):
         # Determine if the to contact trace has been successful
