@@ -315,8 +315,8 @@ class household_sim_contact_tracing:
         """Returns whether both ends of an edge have the app, and the app does the tracing.
         """
         node_1_app = self.G.nodes[edge[0]]["has_trace_app"]
-        node_2_app = self.G.nodes[edge[0]]["has_trace_app"]
-        return node_2_app and node_1_app
+        node_2_app = self.G.nodes[edge[1]]["has_trace_app"]
+        return (node_2_app and node_1_app)
 
     def increment_infection(self, node_count):
         """
@@ -840,6 +840,37 @@ class household_sim_contact_tracing:
 
         # Infection Count output
         self.inf_counts = self.total_cases
+
+    def onset_to_isolation_times(self, include_self_reports = True):
+        if include_self_reports:
+            return [
+                self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] - self.G.nodes[node]["symptom_onset"] 
+                for node in self.G.nodes() 
+                if self.G.nodes[node]["isolated"] == True
+            ]
+        else:
+            return [
+                self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] - self.G.nodes[node]["symptom_onset"] 
+                for node in self.G.nodes() 
+                if self.G.nodes[node]["isolated"] == True
+                and self.house_dict[self.G.nodes[node]["household"]]["being_contact_traced_from"] != None
+            ]
+
+
+    def infected_to_isolation_times(self, include_self_reports = True):
+        if include_self_reports:
+            return [
+                self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] - self.G.nodes[node]["time_infected"] 
+                for node in self.G.nodes() 
+                if self.G.nodes[node]["isolated"] == True
+            ]
+        else:
+            return [
+                self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] - self.G.nodes[node]["time_infected"] 
+                for node in self.G.nodes() 
+                if self.G.nodes[node]["isolated"] == True
+                and self.house_dict[self.G.nodes[node]["household"]]["being_contact_traced_from"] != None
+            ]
 
     def get_cmap(self, n, name='hsv'):
         '''
