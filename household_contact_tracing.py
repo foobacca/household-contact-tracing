@@ -170,6 +170,7 @@ class household_sim_contact_tracing:
         # Visual Parameters:
         self.contact_traced_edge_colour_within_house = "blue"
         self.contact_traced_edge_between_house = "magenta"
+        self.app_traced_edge = "green"
         self.default_edge_colour = "black"
         self.failed_contact_tracing = "red"
 
@@ -287,10 +288,12 @@ class household_sim_contact_tracing:
                                     "time": self.time,                   # The time at which the infection entered the household
                                     "susceptibles": house_size - 1,      # How many susceptibles remain in the household
                                     "isolated": False,                   # Has the household been isolated, so there can be no more infections from this household
+                                    "isolated_time": float('inf'),       # When the house was isolated
                                     "contact_traced": False,             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
                                     "time_until_contact_traced": float('inf'),# The time until quarantine, calculated from contact tracing processes on connected households
                                     "being_contact_traced_from": None,   # If the house if being contact traced, this is the house_id of the first house that will get there
                                     "propagated_contact_tracing": False, # The house has not yet propagated contact tracing
+                                    "time_propagated_tracing": None,     # Time household propagated contact tracing
                                     "contact_tracing_step": None,        # The house is being contact traced by which step of the contact tracing process
                                     "generation": generation,            # Which generation of households it belongs to
                                     "infected_by": infected_by,          # Which house infected the household
@@ -430,6 +433,7 @@ class household_sim_contact_tracing:
         For each node that is contact traced
         """
 
+        
         # Update the contact traced status for all households that have had the contact tracing process get there
         [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
                                                                                 and self.house_dict[house]["contact_traced"] == False)]
@@ -455,9 +459,11 @@ class household_sim_contact_tracing:
 
             # Propagate the contact tracing for all households that are isolated due to exposure, have developed symptoms and had a test come back
             [self.propagate_contact_tracing(self.G.nodes[node]["household"]) for node in self.G.nodes() if (
-                self.G.nodes[node]["symptom_onset"] + self.G.nodes[node]["testing_delay"] == self.time
+                self.G.nodes[node]["symptom_onset"] <= self.time
                 and self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] == False
+                and self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time
             )]
+
         
         # The following chunk of code is to record counts of how many contacts must be traced, used for evaluating when capacity is reached
         # Get all the cases that have reported their infection today
@@ -606,7 +612,10 @@ class household_sim_contact_tracing:
                         if self.house_dict[node_to_household]["contact_traced"] == False:
                             self.attempt_contact_trace_of_household(node_to_household, house_to, contact_trace_delay, trace_neighbours=False)
             
-            self.colour_node_edges_between_houses(house_to, house_from, self.contact_traced_edge_between_house)
+            if app_traced:
+                self.colour_node_edges_between_houses(house_to, house_from, self.app_traced_edge)
+            else:
+                self.colour_node_edges_between_houses(house_to, house_from, self.contact_traced_edge_between_house)
         else:
             self.colour_node_edges_between_houses(house_to, house_from, self.failed_contact_tracing)
 
@@ -624,7 +633,8 @@ class household_sim_contact_tracing:
         
         # The house moves to isolated status
         self.house_dict[household_number].update({"isolated": True})
-        self.house_dict[household_number].update({"contact_traced": True})
+        #self.house_dict[household_number].update({"contact_traced": True})
+        self.house_dict[household_number].update({"isolated_time": self.time})
         
         # Update every node in the house to the isolated status
         infectives_in_house = self.house_dict[household_number]["nodes"]
@@ -639,7 +649,10 @@ class household_sim_contact_tracing:
         
         # Initially the edge is assigned the contact tracing colour, may be updated if the contact tracing does not succeed
         if house_which_contact_traced:
-            self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.contact_traced_edge_between_house)
+            if self.is_edge_app_traced(self.get_edge_between_household(household_number, house_which_contact_traced)):
+                self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.app_traced_edge)
+            else:
+                self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.contact_traced_edge_between_house)
         
         # We update the colour of every edge so that we can tell which household have been contact traced when we visualise
         [
@@ -655,7 +668,10 @@ class household_sim_contact_tracing:
         """
         To be called after a node in a household either reports their symptoms, and gets tested, when a household that is under surveillance develops symptoms + gets tested.
         """
+
+        # update the propagation data
         self.house_dict[household_number].update({"propagated_contact_tracing": True})
+        self.house_dict[household_number].update({"time_propagated_tracing": self.time})
 
         # Contact tracing attempted for the household that infected the household currently propagating the infection
         infected_by = self.house_dict[household_number]["infected_by"]
@@ -664,7 +680,7 @@ class household_sim_contact_tracing:
         if infected_by == None:
             is_infector_traced = True
         else:
-            is_infector_traced = self.house_dict[infected_by]["contact_traced"]
+            is_infector_traced = self.house_dict[infected_by]["isolated"]
             
         if is_infector_traced == False:
             self.attempt_contact_trace_of_household(infected_by, household_number, trace_neighbours=self.do_2_step)
@@ -672,7 +688,7 @@ class household_sim_contact_tracing:
         # Contact tracing for the households infected by the household currently traced
         child_households = self.house_dict[household_number]["spread_to"]
 
-        child_households_not_traced = [house for house in child_households if self.house_dict[house]["contact_traced"] == False]
+        child_households_not_traced = [house for house in child_households if self.house_dict[house]["isolated"] == False]
 
         for house in child_households_not_traced:
             self.attempt_contact_trace_of_household(house, household_number, trace_neighbours=self.do_2_step)
@@ -864,10 +880,12 @@ class household_sim_contact_tracing:
         proxies = [self.make_proxy(clr, lw=1) for clr in (self.default_edge_colour,
                                                     self.contact_traced_edge_colour_within_house,
                                                     self.contact_traced_edge_between_house,
+                                                    self.app_traced_edge,
                                                     self.failed_contact_tracing)]
         labels = ("Transmission, yet to be traced",
                 "Within household contact tracing",
                 "Between household contact tracing",
+                "App traced edge",
                 "Failed contact trace")
 
         node_households = {}
