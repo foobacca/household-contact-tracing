@@ -24,15 +24,19 @@ except ImportError:
 gen_shape = 2.85453
 gen_scale = 5.61
 
+
 def weibull_pdf(t):
     out = (gen_shape/gen_scale)*(t/gen_scale)**(gen_shape-1)*math.exp(-(t/gen_scale)**gen_shape)
     return out
 
+
 def weibull_hazard(t):
     return (gen_shape/gen_scale)*(t/gen_scale)**(gen_shape-1)
 
+
 def weibull_survival(t):
     return math.exp(-(t/gen_scale)**gen_shape)
+
 
 # Probability of a contact causing infection
 def unconditional_hazard_rate(t, survive_forever):
@@ -57,6 +61,7 @@ def unconditional_hazard_rate(t, survive_forever):
     unconditional_survival = (1-survive_forever)*weibull_survival(t) + survive_forever
     return unconditional_pdf/unconditional_survival
 
+
 def current_prob_infection(t, survive_forever):
     """Integrates over the unconditional hazard rate to get the probability of a contact causing infection on day t.
 
@@ -68,6 +73,7 @@ def current_prob_infection(t, survive_forever):
     """
     hazard = lambda t: unconditional_hazard_rate(t, survive_forever)
     return s.integrate.quad(hazard, t, t+1)[0]
+
 
 def negbin_pdf(x, m, a):
     """
@@ -81,6 +87,7 @@ def negbin_pdf(x, m, a):
     B = (1/(1 + a*m))**(1/a)
     C = (a*m/(1 + a*m))**x
     return A*B*C
+
 
 def compute_negbin_cdf(mean, overdispersion, length_out):
     """
@@ -529,7 +536,6 @@ class household_sim_contact_tracing:
                 if self.G.has_edge(node_1, node_2):
                     self.G.edges[node_1, node_2].update({"colour": new_colour})
 
-
     def attempt_contact_trace_of_household(self, house_to, house_from, contact_trace_delay=0, trace_neighbours=False):
         # Determine if the to contact trace has been successful
         if (npr.binomial(1, self.contact_tracing_success_prob) == 1):
@@ -589,7 +595,6 @@ class household_sim_contact_tracing:
         # Initially the edge is assigned the contact tracing colour, may be updated if the contact tracing does not succeed
         if house_which_contact_traced:
             self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.contact_traced_edge_between_house)
-
 
         # Contact tracing attempted for the household that infected the household currently being isolated
         infected_by = self.house_dict[household_number]["infected_by"]
