@@ -102,6 +102,20 @@ def compute_negbin_cdf(mean, overdispersion, length_out):
 
 
 class household_sim_contact_tracing:
+    # We assign each node a recovery period of 14 days, after 14 days the probability of causing a new infections is 0, due to the generation time distribution
+    effective_infectious_period = 21
+
+    # Working out the parameters of the incubation period
+    ip_mean = 4.83
+    ip_var = 2.78**2
+    ip_scale = ip_var/ip_mean
+    ip_shape = ip_mean/ip_scale  # = ip_mean ** 2 / ip_var
+
+    # Visual Parameters:
+    contact_traced_edge_colour_within_house = "blue"
+    contact_traced_edge_between_house = "magenta"
+    default_edge_colour = "black"
+    failed_contact_tracing = "red"
 
     def __init__(self,
                 haz_rate_scale,
@@ -146,12 +160,6 @@ class household_sim_contact_tracing:
             6: compute_negbin_cdf(means[5], overdispersion, 100)
         }
 
-        # Working out the parameters of the incubation period
-        ip_mean = 4.83
-        ip_var = 2.78**2
-        self.ip_scale = ip_var/ip_mean
-        self.ip_shape = ip_mean/self.ip_scale
-
         # Parameter Inputs:
         self.haz_rate_scale = haz_rate_scale
         self.contact_tracing_success_prob = contact_tracing_success_prob
@@ -165,18 +173,11 @@ class household_sim_contact_tracing:
         self.only_isolate_if_symptoms = only_isolate_if_symptoms
         self.do_2_step = do_2_step
 
-
-        # Visual Parameters:
-        self.contact_traced_edge_colour_within_house = "blue"
-        self.contact_traced_edge_between_house = "magenta"
-        self.default_edge_colour = "black"
-        self.failed_contact_tracing = "red"
-
     def contact_trace_delay(self):
         return 1 + npr.negative_binomial(1, self.prob_of_successful_contact_trace_today)
 
     def incubation_period(self):
-        return round(npr.gamma(shape = self.ip_shape, scale = self.ip_scale))
+        return round(npr.gamma(shape=self.ip_shape, scale=self.ip_scale))
 
     def contacts_made_today(self, household_size):
         """Generates the number of contacts made today by a node, given the house size of the node. Uses an overdispersed negative binomial distribution.
@@ -198,10 +199,7 @@ class household_sim_contact_tracing:
         return npr.choice([1,2,3,4,5,6], p = self.size_biased_distribution)
 
     def has_contact_tracing_app(self):
-        if npr.binomial(1, self.prob_has_trace_app) == 1:
-            return True
-        else:
-            return False
+        return npr.binomial(1, self.prob_has_trace_app) == 1
 
     def count_non_recovered_nodes(self):
         """Returns the number of nodes not in the recovered state.
@@ -259,9 +257,7 @@ class household_sim_contact_tracing:
 
         # Updates to the household dictionary
         # Each house now stores a the ID's of which nodes are stored inside the house, so that quarantining can be done at the household level
-        nodes_in_house = household_dict[household]['nodes']
-        nodes_in_house.append(node_count)
-        household_dict[household].update({'nodes': nodes_in_house})
+        household_dict[household]['nodes'].append(node_count)
 
     def increment_infection(self, node_count):
         """
@@ -315,9 +311,7 @@ class household_sim_contact_tracing:
                     node_count += 1
 
                     # We record which node caused this infection
-                    secondary_infection = self.G.nodes()[node]["spread_to"]
-                    secondary_infection.append(node_count)
-                    self.G.nodes()[node].update({"spread_to": secondary_infection})
+                    self.G.nodes()[node]["spread_to"].append(node_count)
 
                     # Adds the new infection to the network
                     self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, node_household, self.house_dict, days_since_infected)
@@ -327,17 +321,13 @@ class household_sim_contact_tracing:
                     self.G.edges[node, node_count].update({"colour": self.default_edge_colour})
 
                     # Decrease the number of susceptibles in that house by 1
-                    new_susceptibles = self.house_dict[node_household]['susceptibles'] - 1
-                    self.house_dict[node_household].update({'susceptibles': new_susceptibles})
+                    self.house_dict[node_household]['susceptibles'] -= 1
 
                     # We record which edges are within this household for visualisation later on
-                    current_edges = self.house_dict[node_household]["within_house_edges"]
-                    current_edges.append((node, node_count))
-                    self.house_dict[node_household].update({"within_house_edges": current_edges})
+                    self.house_dict[node_household]["within_house_edges"].append((node, node_count))
 
             # Update how many contacts the node made
-            total_outside_household_contacts_made = self.G.nodes()[node]["outside_house_contacts_made"] + outside_household_contacts
-            self.G.nodes()[node].update({"outside_house_contacts_made": total_outside_household_contacts_made})
+            self.G.nodes()[node]["outside_house_contacts_made"] += outside_household_contacts
 
             # How many outside household contacts cause new infections
             outside_household_new_infections = npr.binomial(outside_household_contacts, current_prob_infection(days_since_infected, self.haz_rate_scale))
@@ -350,13 +340,10 @@ class household_sim_contact_tracing:
                     node_count += 1
 
                     # We record which node caused this infection
-                    secondary_infection = self.G.nodes()[node]["spread_to"]
-                    secondary_infection.append(node_count)
-                    self.G.nodes()[node].update({"spread_to": secondary_infection})
+                    self.G.nodes()[node]["spread_to"].append(node_count)
 
                     # We record which house spread to which other house
-                    spread_to = self.house_dict[node_household]["spread_to"]
-                    spread_to = spread_to.append(self.house_count)
+                    self.house_dict[node_household]["spread_to"].append(self.house_count)
 
                     # Create a new household, since the infection was outside the household
                     self.new_household(self.house_count, self.house_dict[node_household]["generation"] + 1, self.G.nodes()[node]["household"], node)
