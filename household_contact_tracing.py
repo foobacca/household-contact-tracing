@@ -105,10 +105,9 @@ class household_sim_contact_tracing:
     def __init__(self,
                 haz_rate_scale,
                 contact_tracing_success_prob,
-                prob_of_successful_contact_trace_today,
+                contact_trace_delay_par,
                 overdispersion,
                 infection_reporting_prob,
-                reporting_delay_par,
                 contact_trace,
                 only_isolate_if_symptoms = False,
                 do_2_step = False,
@@ -155,17 +154,19 @@ class household_sim_contact_tracing:
         # Parameter Inputs:
         self.haz_rate_scale = haz_rate_scale
         self.contact_tracing_success_prob = contact_tracing_success_prob
-        self.prob_of_successful_contact_trace_today = prob_of_successful_contact_trace_today
+        self.contact_trace_delay_par = contact_trace_delay_par
         self.overdispersion = overdispersion
         self.infection_reporting_prob = infection_reporting_prob
-        self.reporting_delay_par = reporting_delay_par
         self.contact_trace = contact_trace
         self.prob_has_trace_app = prob_has_trace_app
         self.reduce_contacts_by = reduce_contacts_by
         self.only_isolate_if_symptoms = only_isolate_if_symptoms
         self.do_2_step = do_2_step
         self.test_before_propagate_tracing = test_before_propagate_tracing
-
+        if do_2_step == True:
+            self.max_tracing_index = 2
+        else:
+            self.max_tracing_index = 1
 
         # Visual Parameters:
         self.contact_traced_edge_colour_within_house = "blue"
@@ -176,15 +177,15 @@ class household_sim_contact_tracing:
 
     def contact_trace_delay(self, app_traced_edge):
         if app_traced_edge:
-            return 1 
+            return 0 
         else:
-            return 1 + npr.negative_binomial(1, self.prob_of_successful_contact_trace_today)
+            return npr.poisson(self.contact_trace_delay_par)
     
     def incubation_period(self):
         return round(npr.gamma(shape = self.ip_shape, scale = self.ip_scale))
 
     def testing_delay(self):
-        return 1
+        return round(npr.gamma(shape = 1.52**2/1.11**2, scale = 1.11**2/1.52))
     
     def contacts_made_today(self, household_size):
         """Generates the number of contacts made today by a node, given the house size of the node. Uses an overdispersed negative binomial distribution.
@@ -235,7 +236,7 @@ class household_sim_contact_tracing:
         # When a node reports it's infection
         if npr.binomial(1, self.infection_reporting_prob) == 1:
             will_report = True
-            time_of_reporting = symptom_onset_time + npr.geometric(self.reporting_delay_par)
+            time_of_reporting = symptom_onset_time + round(npr.gamma(shape = 2.62**2/2.38**2, scale = 2.38**2/2.62))
         else:
             will_report = False
             time_of_reporting = float('Inf')
@@ -291,10 +292,11 @@ class household_sim_contact_tracing:
                                     "isolated_time": float('inf'),       # When the house was isolated
                                     "contact_traced": False,             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
                                     "time_until_contact_traced": float('inf'),# The time until quarantine, calculated from contact tracing processes on connected households
+                                    "contact_traced_households": [],     # The list of households contact traced from this one
                                     "being_contact_traced_from": None,   # If the house if being contact traced, this is the house_id of the first house that will get there
                                     "propagated_contact_tracing": False, # The house has not yet propagated contact tracing
                                     "time_propagated_tracing": None,     # Time household propagated contact tracing
-                                    "contact_tracing_step": None,        # The house is being contact traced by which step of the contact tracing process
+                                    "contact_tracing_index": 0,        # The house is which step of the contact tracing process
                                     "generation": generation,            # Which generation of households it belongs to
                                     "infected_by": infected_by,          # Which house infected the household
                                     "spread_to": [],                     # Which households were infected by this household
@@ -439,11 +441,11 @@ class household_sim_contact_tracing:
                                                                                 and self.house_dict[house]["contact_traced"] == False)]
         
         # Isolate all non isolated households where the infection has been reported
-        [self.isolate_household(self.G.nodes()[node]["household"]) for node in self.G.nodes() if (self.G.nodes()[node]["reporting_time"] == self.time
+        [self.isolate_household(self.G.nodes()[node]["household"]) for node in self.G.nodes() if (self.G.nodes()[node]["reporting_time"] <= self.time
                                                                                                     and self.G.nodes()[node]["isolated"] == False)]
         
         # Isolate all households under observation that now display symptoms
-        [self.isolate_household(self.G.nodes[node]["household"]) for node in self.G.nodes() if (self.G.nodes[node]["symptom_onset"] == self.time
+        [self.isolate_household(self.G.nodes[node]["household"]) for node in self.G.nodes() if (self.G.nodes[node]["symptom_onset"] <= self.time
                                                                                                 and self.G.nodes[node]["contact_traced"] == True
                                                                                                 and self.G.nodes[node]["isolated"] == False)]
 
@@ -464,78 +466,93 @@ class household_sim_contact_tracing:
                 and self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time
             )]
 
-        
-        # The following chunk of code is to record counts of how many contacts must be traced, used for evaluating when capacity is reached
-        # Get all the cases that have reported their infection today
-        newly_reported = [node for node in self.G.nodes() if (
-            self.G.nodes()[node]["had_contacts_traced"] == False 
-            and self.G.nodes()[node]["reporting_time"] == self.time)
-            ]
-        
-        # For nodes who have just onset symptoms, but their household has been contact traced, now trace their contacts
-        new_symptomatic = [node for node in self.G.nodes() if (self.G.nodes()[node]["had_contacts_traced"] == False 
-                                                                and self.G.nodes()[node]["symptom_onset"] == self.time 
-                                                                and self.G.nodes()[node]["contact_traced"] == True)]
+            # Update the contact tracing index of households
+            # That is, re-evaluate how far away they are from a known infected case (traced + symptom_onset + testing_delay)
+            self.update_contact_tracing_index()
 
-        households_to_be_traced = [self.G.nodes[node]["household"] for node in (newly_reported + new_symptomatic)]
+            if self.do_2_step:
+
+                # Propagate the contact tracing from any households with a contact tracing index of 1
+                [
+                    self.propagate_contact_tracing(household) for household in self.house_dict if (
+                        self.house_dict[household]["contact_tracing_index"] == 1
+                        and self.house_dict[household]["propagated_contact_tracing"] == False
+                        and self.house_dict[household]["isolated"] == True
+                    )
+                ]
+
         
-        # de-duplicating
-        households_to_be_traced = list(set(households_to_be_traced))
+        # # The following chunk of code is to record counts of how many contacts must be traced, used for evaluating when capacity is reached
+        # # Get all the cases that have reported their infection today
+        # newly_reported = [node for node in self.G.nodes() if (
+        #     self.G.nodes()[node]["had_contacts_traced"] == False 
+        #     and self.G.nodes()[node]["reporting_time"] == self.time)
+        #     ]
+        
+        # # For nodes who have just onset symptoms, but their household has been contact traced, now trace their contacts
+        # new_symptomatic = [node for node in self.G.nodes() if (self.G.nodes()[node]["had_contacts_traced"] == False 
+        #                                                         and self.G.nodes()[node]["symptom_onset"] == self.time 
+        #                                                         and self.G.nodes()[node]["contact_traced"] == True)]
 
-        contacts_to_be_traced = 0
+        # households_to_be_traced = [self.G.nodes[node]["household"] for node in (newly_reported + new_symptomatic)]
+        
+        # # de-duplicating
+        # households_to_be_traced = list(set(households_to_be_traced))
 
-        # We work out how many nodes must now have their contacts traced:
-        for house in households_to_be_traced:
+        # contacts_to_be_traced = 0
+
+        # # We work out how many nodes must now have their contacts traced:
+        # for house in households_to_be_traced:
             
-            # All contacts in house are being traced when the 
-            household_size = self.house_dict[house]["size"]
+        #     # All contacts in house are being traced when the 
+        #     household_size = self.house_dict[house]["size"]
 
-            for node in range(household_size):
-                for _ in range(14):
-                    contacts_made = self.contacts_made_today(household_size)
+        #     for node in range(household_size):
+        #         for _ in range(14):
+        #             contacts_made = self.contacts_made_today(household_size)
                 
-                    # How many of the contacts are within the household
-                    within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household_size-1])
+        #             # How many of the contacts are within the household
+        #             within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household_size-1])
                     
-                    # Each contact is with a unique individual, so it is not possible to have more than h-1 contacts within household
-                    within_household_contacts = min(household_size - 1, within_household_contacts)
+        #             # Each contact is with a unique individual, so it is not possible to have more than h-1 contacts within household
+        #             within_household_contacts = min(household_size - 1, within_household_contacts)
                     
-                    # Work out how many contacts were with other households
-                    # If social distancing is in play, global contacts are reduced by
-                    outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
+        #             # Work out how many contacts were with other households
+        #             # If social distancing is in play, global contacts are reduced by
+        #             outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
 
-                    contacts_to_be_traced += outside_household_contacts
+        #             contacts_to_be_traced += outside_household_contacts
 
-        # update the total contacts to be traced
-        total_contacts_to_be_traced = self.contact_tracing_dict["contacts_to_be_traced"] + contacts_to_be_traced
-        self.contact_tracing_dict.update({"contacts_to_be_traced": total_contacts_to_be_traced})
+        # # update the total contacts to be traced
+        # total_contacts_to_be_traced = self.contact_tracing_dict["contacts_to_be_traced"] + contacts_to_be_traced
+        # self.contact_tracing_dict.update({"contacts_to_be_traced": total_contacts_to_be_traced})
             
-        # Some contacts will never be traced, these are assumed to immediately be removed
-        possible_to_trace = npr.binomial(contacts_to_be_traced, self.contact_tracing_success_prob)
-        total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] + possible_to_trace
-        self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
+        # # Some contacts will never be traced, these are assumed to immediately be removed
+        # possible_to_trace = npr.binomial(contacts_to_be_traced, self.contact_tracing_success_prob)
+        # total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] + possible_to_trace
+        # self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
             
-        # Work out how many were successfully traced today (this is where the geometric assumption becomes very useful)
-        successful_contact_traces = npr.binomial(self.contact_tracing_dict["possible_to_trace_contacts"], self.prob_of_successful_contact_trace_today)
-        total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] - successful_contact_traces
-        self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
+        # # Work out how many were successfully traced today (this is where the geometric assumption becomes very useful)
+        # successful_contact_traces = npr.binomial(self.contact_tracing_dict["possible_to_trace_contacts"], 0.7)
+        # total_possible_to_trace = self.contact_tracing_dict["possible_to_trace_contacts"] - successful_contact_traces
+        # self.contact_tracing_dict.update({"possible_to_trace_contacts": total_possible_to_trace})
         
-        # Add another entry to the time series
-        trace_log = self.contact_tracing_dict["total_traced_each_day"]
-        trace_log.append(successful_contact_traces)
-        self.contact_tracing_dict.update({"total_traced_each_day": trace_log})
+        # # Add another entry to the time series
+        # trace_log = self.contact_tracing_dict["total_traced_each_day"]
+        # trace_log.append(successful_contact_traces)
+        # self.contact_tracing_dict.update({"total_traced_each_day": trace_log})
         
-        # Record how many active surveillances there are
-        if self.time > 14:
-            currently_being_surveilled = sum(self.contact_tracing_dict["total_traced_each_day"][-14:])
-        else:
-            currently_being_surveilled = sum(self.contact_tracing_dict["total_traced_each_day"])
-        self.contact_tracing_dict.update({"currently_being_surveilled": currently_being_surveilled})
+        # # Record how many active surveillances there are
+        # if self.time > 14:
+        #     currently_being_surveilled = sum(self.contact_tracing_dict["total_traced_each_day"][-14:])
+        # else:
+        #     currently_being_surveilled = sum(self.contact_tracing_dict["total_traced_each_day"])
+        # self.contact_tracing_dict.update({"currently_being_surveilled": currently_being_surveilled})
         
-        # Daily active surveillances
-        daily_active_surveillances = self.contact_tracing_dict["daily_active_surveillances"]
-        daily_active_surveillances.append(currently_being_surveilled)
-        self.contact_tracing_dict.update({"daily_active_surveillances": daily_active_surveillances})
+        # # Daily active surveillances
+        # daily_active_surveillances = self.contact_tracing_dict["daily_active_surveillances"]
+        # daily_active_surveillances.append(currently_being_surveilled)
+        # self.contact_tracing_dict.update({"daily_active_surveillances": daily_active_surveillances})
 
     def contact_trace_household(self, household_number):
         """
@@ -576,7 +593,7 @@ class household_sim_contact_tracing:
                 if self.G.has_edge(node_1, node_2):
                     self.G.edges[node_1, node_2].update({"colour": new_colour})
 
-    def attempt_contact_trace_of_household(self, house_to, house_from, contact_trace_delay=0, trace_neighbours=False):
+    def attempt_contact_trace_of_household(self, house_to, house_from, contact_trace_delay=0):
         # Decide if the edge was traced by the app
         app_traced = self.is_edge_app_traced(self.get_edge_between_household(house_from, house_to))
 
@@ -588,6 +605,12 @@ class household_sim_contact_tracing:
 
         # is the trace successful
         if (npr.binomial(1, success_prob) == 1):
+            
+            # Update the list of traced households from this one
+            self.house_dict[house_from]["contact_traced_households"].append(house_to)
+
+            # Assign the household a contact tracing index, 1 more than it's parent tracer
+            self.house_dict[house_to].update({"contact_tracing_index": self.house_dict[house_from]["contact_tracing_index"] + 1})
 
             # work out the time delay
             contact_trace_delay = contact_trace_delay + self.contact_trace_delay(app_traced)
@@ -603,15 +626,16 @@ class household_sim_contact_tracing:
                 self.house_dict[house_to].update({"being_contact_traced_from": house_from})
 
             # should this only be done if the route is used (above block)
-            if trace_neighbours:
-                for node_from in self.house_dict[house_to]["nodes"]:
-                    for node_to in nx.neighbors(self.G, node_from):
+            # if trace_neighbours:
+            #     for node_from in self.house_dict[house_to]["nodes"]:
+            #         for node_to in nx.neighbors(self.G, node_from):
 
-                        node_to_household = self.G.nodes[node_to]["household"]
+            #             node_to_household = self.G.nodes[node_to]["household"]
 
-                        if self.house_dict[node_to_household]["contact_traced"] == False:
-                            self.attempt_contact_trace_of_household(node_to_household, house_to, contact_trace_delay, trace_neighbours=False)
+            #             if self.house_dict[node_to_household]["contact_traced"] == False:
+            #                 self.attempt_contact_trace_of_household(node_to_household, house_to, contact_trace_delay, trace_neighbours=False)
             
+            # Edge colouring
             if app_traced:
                 self.colour_node_edges_between_houses(house_to, house_from, self.app_traced_edge)
             else:
@@ -683,7 +707,7 @@ class household_sim_contact_tracing:
             is_infector_traced = self.house_dict[infected_by]["isolated"]
             
         if is_infector_traced == False:
-            self.attempt_contact_trace_of_household(infected_by, household_number, trace_neighbours=self.do_2_step)
+            self.attempt_contact_trace_of_household(infected_by, household_number)
         
         # Contact tracing for the households infected by the household currently traced
         child_households = self.house_dict[household_number]["spread_to"]
@@ -691,8 +715,30 @@ class household_sim_contact_tracing:
         child_households_not_traced = [house for house in child_households if self.house_dict[house]["isolated"] == False]
 
         for house in child_households_not_traced:
-            self.attempt_contact_trace_of_household(house, household_number, trace_neighbours=self.do_2_step)
+            self.attempt_contact_trace_of_household(house, household_number)
 
+    def update_contact_tracing_index(self):
+        for household in self.house_dict:
+
+            # loop over households with non-zero indexes, those that have been contact traced but with 
+            if self.house_dict[household]["contact_tracing_index"] != 0:
+
+                for node in self.house_dict[household]["nodes"]:
+                    
+                    # Necessary conditions for an index 1 household to propagate tracing:
+                    # The node must have onset of symptoms
+                    # The node households must be isolated
+                    # The testing delay must be passed
+                    # The testing delay starts when the house have been isolated and symptoms have onset
+                    critical_time = max(self.G.nodes[node]["symptom_onset"], self.house_dict[household]["isolated_time"])
+
+                    if (critical_time + self.G.nodes[node]["testing_delay"] <= self.time):
+
+                        self.house_dict[household].update({"contact_tracing_index": 0})
+
+                        for index_1_hh in self.house_dict[household]["contact_traced_households"]:
+                            if self.house_dict[index_1_hh]["contact_tracing_index"] == 2:
+                                self.house_dict[index_1_hh].update({"contact_tracing_index": 1})
 
     def simulate_one_day(self):
         """Simulates one day of the epidemic and contact tracing.
@@ -702,7 +748,8 @@ class household_sim_contact_tracing:
         node_count = nx.number_of_nodes(self.G)
         self.increment_infection(node_count)
         if self.contact_trace == True:
-            self.increment_contact_tracing()
+            for _ in range(5):
+                self.increment_contact_tracing()
         self.perform_recoveries()
         self.time += 1
 
@@ -748,7 +795,7 @@ class household_sim_contact_tracing:
         self.new_infection(node_count, generation, self.house_count, self.house_dict)
 
         # While loop ends when there are no non-isolated infections
-        currently_infecting = len([node for node in self.G.nodes() if self.G.nodes()[node]["isolated"] == False])
+        currently_infecting = len(currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] == False]))
 
         while (currently_infecting != 0 and self.hit_8000 == False and self.timed_out == False):
 
