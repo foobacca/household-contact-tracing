@@ -113,6 +113,7 @@ class household_sim_contact_tracing:
                 do_2_step = False,
                 reduce_contacts_by = 1,
                 prob_has_trace_app = 0,
+                test_delay_mean = 1.52,
                 test_before_propagate_tracing = False):
         """Initializes parameters and distributions for performing a simulation of contact tracing.
         The epidemic is modelled as a branching process, with nodes assigned to households.
@@ -163,6 +164,7 @@ class household_sim_contact_tracing:
         self.only_isolate_if_symptoms = only_isolate_if_symptoms
         self.do_2_step = do_2_step
         self.test_before_propagate_tracing = test_before_propagate_tracing
+        self.test_delay_mean = test_delay_mean
         if do_2_step == True:
             self.max_tracing_index = 2
         else:
@@ -185,7 +187,7 @@ class household_sim_contact_tracing:
         return round(npr.gamma(shape = self.ip_shape, scale = self.ip_scale))
 
     def testing_delay(self):
-        return round(npr.gamma(shape = 1.52**2/1.11**2, scale = 1.11**2/1.52))
+        return round(npr.gamma(shape = self.test_delay_mean**2/1.11**2, scale = 1.11**2/self.test_delay_mean))
     
     def contacts_made_today(self, household_size):
         """Generates the number of contacts made today by a node, given the house size of the node. Uses an overdispersed negative binomial distribution.
