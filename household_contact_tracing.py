@@ -25,13 +25,14 @@ except ImportError:
 gen_shape = 2.85453
 gen_scale = 5.61
 
+
 def weibull_pdf(t):
-    out = (gen_shape/gen_scale)*(t/gen_scale)**(gen_shape-1)*math.exp(-(t/gen_scale)**gen_shape)
+    out = (gen_shape / gen_scale) * (t / gen_scale)**(gen_shape - 1) * math.exp(-(t / gen_scale)**gen_shape)
     return out
 
 
 def weibull_hazard(t):
-    return (gen_shape/gen_scale)*(t/gen_scale)**(gen_shape-1)
+    return (gen_shape / gen_scale)*(t / gen_scale)**(gen_shape - 1)
 
 
 def weibull_survival(t):
@@ -43,7 +44,8 @@ def unconditional_hazard_rate(t, survive_forever):
     """
     Borrowed from survival analysis.
 
-    In order to get the correct generation time distribution, we set the probability of a contact on day t equal to the generation time distribution's hazard rate on day t
+    To get the correct generation time distribution, set the probability
+    of a contact on day t equal to the generation time distribution's hazard rate on day t
 
     Since it is not guaranteed that an individual will be infected, we use improper variables and rescale appropriately.
     The R0 scaling parameter controls this, as R0 is closely related to the probability of not being infected
@@ -71,13 +73,13 @@ def current_prob_infection(t, survive_forever):
         t {int} -- current day
         survive_forever {float} -- rescales the hazard rate so that it is possible to not be infected
     """
-    hazard = lambda t: unconditional_hazard_rate(t, survive_forever)
-    return si.quad(hazard, t, t+1)[0]
+    return si.quad(lambda t: unconditional_hazard_rate(t, survive_forever), t, t+1)[0]
 
 
 def negbin_pdf(x, m, a):
     """
-    We need to draw values from an overdispersed negative binomial distribution, with non-integer inputs. Had to generate the numbers myself in order to do this.
+    We need to draw values from an overdispersed negative binomial distribution, with non-integer inputs. Had to 
+    generate the numbers myself in order to do this.
     This is the generalized negbin used in glm models I think.
 
     m = mean
@@ -91,7 +93,8 @@ def negbin_pdf(x, m, a):
 
 def compute_negbin_cdf(mean, overdispersion, length_out):
     """
-    Computes the overdispersed negative binomial cdf, which we use to generate random numbers by generating uniform(0,1) rv's.
+    Computes the overdispersed negative binomial cdf, which we use to generate random numbers by generating uniform(0,1)
+    rv's.
     """
     pdf = [negbin_pdf(i, mean, overdispersion) for i in range(length_out)]
     cdf = [sum(pdf[:i]) for i in range(length_out)]
@@ -102,14 +105,15 @@ def compute_negbin_cdf(mean, overdispersion, length_out):
 
 
 class household_sim_contact_tracing:
-    # We assign each node a recovery period of 14 days, after 14 days the probability of causing a new infections is 0, due to the generation time distribution
+    # We assign each node a recovery period of 14 days, after 14 days the probability of causing a new infections is 0,
+    # due to the generation time distribution
     effective_infectious_period = 21
 
     # Working out the parameters of the incubation period
     ip_mean = 4.83
     ip_var = 2.78**2
     ip_scale = ip_var/ip_mean
-    ip_shape = ip_mean/ip_scale  # = ip_mean ** 2 / ip_var
+    ip_shape = ip_mean ** 2 / ip_var
 
     # Visual Parameters:
     contact_traced_edge_colour_within_house = "blue"
@@ -119,18 +123,18 @@ class household_sim_contact_tracing:
     app_traced_edge = "green"
 
     def __init__(self,
-                haz_rate_scale,
-                contact_tracing_success_prob,
-                contact_trace_delay_par,
-                overdispersion,
-                infection_reporting_prob,
-                contact_trace,
-                only_isolate_if_symptoms = False,
-                do_2_step = False,
-                reduce_contacts_by = 1,
-                prob_has_trace_app = 0,
-                test_delay_mean = 1.52,
-                test_before_propagate_tracing = False):
+                 haz_rate_scale,
+                 contact_tracing_success_prob,
+                 contact_trace_delay_par,
+                 overdispersion,
+                 infection_reporting_prob,
+                 contact_trace,
+                 only_isolate_if_symptoms=False,
+                 do_2_step=False,
+                 reduce_contacts_by=1,
+                 prob_has_trace_app=0,
+                 test_delay_mean=1.52,
+                 test_before_propagate_tracing=False):
         """Initializes parameters and distributions for performing a simulation of contact tracing.
         The epidemic is modelled as a branching process, with nodes assigned to households.
 
@@ -143,7 +147,8 @@ class household_sim_contact_tracing:
         # Probability of each household size
         house_size_probs = [0.294591195, 0.345336927, 0.154070081, 0.139478886, 0.045067385, 0.021455526]
 
-        # Size biased distribution of households (choose a node, what is the prob they are in a house size 6, this is biased by the size of the house)
+        # Size biased distribution of households (choose a node, what is the prob they are in a house size 6, this is 
+        # biased by the size of the house)
         size_biased_distribution = [(i+1)*house_size_probs[i] for i in range(6)]
         total = sum(size_biased_distribution)
         self.size_biased_distribution = [prob/total for prob in size_biased_distribution]
@@ -180,26 +185,35 @@ class household_sim_contact_tracing:
         self.do_2_step = do_2_step
         self.test_before_propagate_tracing = test_before_propagate_tracing
         self.test_delay_mean = test_delay_mean
-        if do_2_step == True:
+        if do_2_step:
             self.max_tracing_index = 2
         else:
             self.max_tracing_index = 1
 
-
     def contact_trace_delay(self, app_traced_edge):
         if app_traced_edge:
-            return 0 
+            return 0
         else:
             return npr.poisson(self.contact_trace_delay_par)
-    
+
     def incubation_period(self):
-        return round(npr.gamma(shape = self.ip_shape, scale = self.ip_scale))
+        return round(npr.gamma(
+            shape=self.ip_shape,
+            scale=self.ip_scale))
 
     def testing_delay(self):
-        return round(npr.gamma(shape = self.test_delay_mean**2/1.11**2, scale = 1.11**2/self.test_delay_mean))
-    
+        return round(npr.gamma(
+            shape=self.test_delay_mean**2/1.11**2,
+            scale=1.11**2/self.test_delay_mean))
+
+    def reporting_delay(self):
+        return round(npr.gamma(
+            shape=2.62**2/2.38**2,
+            scale=2.38**2/2.62))
+
     def contacts_made_today(self, household_size):
-        """Generates the number of contacts made today by a node, given the house size of the node. Uses an overdispersed negative binomial distribution.
+        """Generates the number of contacts made today by a node, given the house size of the node. Uses an 
+        overdispersed negative binomial distribution.
 
         Arguments:
             house_size {int} -- size of the nodes household
@@ -244,12 +258,13 @@ class household_sim_contact_tracing:
         # When a node reports it's infection
         if npr.binomial(1, self.infection_reporting_prob) == 1:
             will_report = True
-            time_of_reporting = symptom_onset_time + round(npr.gamma(shape = 2.62**2/2.38**2, scale = 2.38**2/2.62))
+            time_of_reporting = symptom_onset_time + self.reporting_delay()
         else:
             will_report = False
             time_of_reporting = float('Inf')
 
-        # We assign each node a recovery period of 21 days, after 21 days the probability of causing a new infections is 0, due to the generation time distribution
+        # We assign each node a recovery period of 21 days, after 21 days the probability of causing a new infections is
+        # 0, due to the generation time distribution
         recovery_time = self.time + 21
 
         # Give the node the required attributes
@@ -288,7 +303,7 @@ class household_sim_contact_tracing:
             infected_by {int} -- Which household spread the infection to this household
             infected_by_node {int} -- Which node spread the infection to this household
         """
-        house_size = self.size_of_household() # Added one because we do not have size 0 households
+        house_size = self.size_of_household()  # Added one because we do not have size 0 households
         self.house_dict.update({new_household_number:
                                 { 
                                     "size": house_size,                  # Size of the household
@@ -300,9 +315,9 @@ class household_sim_contact_tracing:
                                     "time_until_contact_traced": float('inf'),# The time until quarantine, calculated from contact tracing processes on connected households
                                     "contact_traced_households": [],     # The list of households contact traced from this one
                                     "being_contact_traced_from": None,   # If the house if being contact traced, this is the house_id of the first house that will get there
-                                    "propagated_contact_tracing": False, # The house has not yet propagated contact tracing
+                                    "propagated_contact_tracing": False,  # The house has not yet propagated contact tracing
                                     "time_propagated_tracing": None,     # Time household propagated contact tracing
-                                    "contact_tracing_index": 0,        # The house is which step of the contact tracing process
+                                    "contact_tracing_index": 0,          # The house is which step of the contact tracing process
                                     "generation": generation,            # Which generation of households it belongs to
                                     "infected_by": infected_by,          # Which house infected the household
                                     "spread_to": [],                     # Which households were infected by this household
@@ -417,7 +432,7 @@ class household_sim_contact_tracing:
 
                     # Create a new household, since the infection was outside the household
                     self.new_household(self.house_count, self.house_dict[node_household]["generation"] + 1, self.G.nodes()[node]["household"], node)
-                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, days_since_infected)
+                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, self.house_count, days_since_infected)
 
                     # Add the edge to the graph and give it the default colour
                     self.G.add_edge(node, node_count)
@@ -435,7 +450,6 @@ class household_sim_contact_tracing:
         For each node that is contact traced
         """
 
-        
         # Update the contact traced status for all households that have had the contact tracing process get there
         [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
                                                                                 and self.house_dict[house]["contact_traced"] == False)]
