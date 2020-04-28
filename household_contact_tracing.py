@@ -185,12 +185,6 @@ class household_sim_contact_tracing:
         else:
             self.max_tracing_index = 1
 
-        # # Visual Parameters:
-        # self.contact_traced_edge_colour_within_house = "blue"
-        # self.contact_traced_edge_between_house = "magenta"
-        # self.app_traced_edge = "green"
-        # self.default_edge_colour = "black"
-        # self.failed_contact_tracing = "red"
 
     def contact_trace_delay(self, app_traced_edge):
         if app_traced_edge:
@@ -423,7 +417,7 @@ class household_sim_contact_tracing:
 
                     # Create a new household, since the infection was outside the household
                     self.new_household(self.house_count, self.house_dict[node_household]["generation"] + 1, self.G.nodes()[node]["household"], node)
-                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, self.house_dict, days_since_infected)
+                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, days_since_infected)
 
                     # Add the edge to the graph and give it the default colour
                     self.G.add_edge(node, node_count)
@@ -806,7 +800,7 @@ class household_sim_contact_tracing:
         self.timed_out = False  # flag for whether the simulation reached it's time limit without another stop condition being met
 
         # Starting nodes/generation
-        self.new_infection(node_count, generation, self.house_count, self.house_dict)
+        self.new_infection(node_count, generation, self.house_count)
 
         # While loop ends when there are no non-isolated infections
         currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
@@ -875,7 +869,7 @@ class household_sim_contact_tracing:
         self.extinct = False
 
         # Starting nodes/generation
-        self.new_infection(node_count, generation, self.house_count, self.house_dict)
+        self.new_infection(node_count, generation, self.house_count)
         node_count += 1
 
         # While loop ends when there are no non-isolated infections
