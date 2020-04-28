@@ -161,6 +161,9 @@ class household_sim_contact_tracing:
             6: compute_negbin_cdf(means[5], overdispersion, 100)
         }
 
+        # Setting up the house dictionary
+        self.house_dict = {}
+
         # Parameter Inputs:
         self.haz_rate_scale = haz_rate_scale
         self.contact_tracing_success_prob = contact_tracing_success_prob
@@ -259,7 +262,7 @@ class household_sim_contact_tracing:
             "generation": generation,
             "household": household,
             "contact_traced": False,
-            "isolated": household_dict[household]["isolated"],
+            "isolated": self.house_dict[household]["isolated"],
             "symptom_onset": symptom_onset_time,
             "outside_house_contacts_made": 0,
             "had_contacts_traced": False,
@@ -277,7 +280,7 @@ class household_sim_contact_tracing:
 
         # Updates to the household dictionary
         # Each house now stores a the ID's of which nodes are stored inside the house, so that quarantining can be done at the household level
-        self.household_dict[household]['nodes'].append(node_count)
+        self.house_dict[household]['nodes'].append(node_count)
 
     def new_household(self, new_household_number, generation, infected_by, infected_by_node):
         """Adds a new household to the household dictionary
@@ -384,7 +387,7 @@ class household_sim_contact_tracing:
                     self.G.nodes()[node]["spread_to"].append(node_count)
 
                     # Adds the new infection to the network
-                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, node_household, self.house_dict, days_since_infected)
+                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, node_household, days_since_infected)
 
                     # Add the edge to the graph and give it the default colour
                     self.G.add_edge(node, node_count)
@@ -417,7 +420,7 @@ class household_sim_contact_tracing:
 
                     # Create a new household, since the infection was outside the household
                     self.new_household(self.house_count, self.house_dict[node_household]["generation"] + 1, self.G.nodes()[node]["household"], node)
-                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, self.house_count, self.house_dict, days_since_infected)
+                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, self.house_dict, days_since_infected)
 
                     # Add the edge to the graph and give it the default colour
                     self.G.add_edge(node, node_count)
