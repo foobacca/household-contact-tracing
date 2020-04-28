@@ -3,6 +3,7 @@ import numpy.random as npr
 import matplotlib.pyplot as plt
 import networkx as nx
 import scipy as s
+import scipy.integrate as si
 import math
 from matplotlib.lines import Line2D
 try:
@@ -23,7 +24,6 @@ except ImportError:
 # mean 5, sd = 1.9
 gen_shape = 2.85453
 gen_scale = 5.61
-
 
 def weibull_pdf(t):
     out = (gen_shape/gen_scale)*(t/gen_scale)**(gen_shape-1)*math.exp(-(t/gen_scale)**gen_shape)
@@ -72,7 +72,7 @@ def current_prob_infection(t, survive_forever):
         survive_forever {float} -- rescales the hazard rate so that it is possible to not be infected
     """
     hazard = lambda t: unconditional_hazard_rate(t, survive_forever)
-    return s.integrate.quad(hazard, t, t+1)[0]
+    return si.quad(hazard, t, t+1)[0]
 
 
 def negbin_pdf(x, m, a):
@@ -116,6 +116,7 @@ class household_sim_contact_tracing:
     contact_traced_edge_between_house = "magenta"
     default_edge_colour = "black"
     failed_contact_tracing = "red"
+    app_traced_edge = "green"
 
     def __init__(self,
                 haz_rate_scale,
@@ -161,8 +162,10 @@ class household_sim_contact_tracing:
             6: compute_negbin_cdf(means[5], overdispersion, 100)
         }
 
-        # Setting up the house dictionary
+        # Setting up for testing purposes
         self.house_dict = {}
+        self.time = 0
+        self.G = nx.Graph()
 
         # Parameter Inputs:
         self.haz_rate_scale = haz_rate_scale
@@ -182,12 +185,12 @@ class household_sim_contact_tracing:
         else:
             self.max_tracing_index = 1
 
-        # Visual Parameters:
-        self.contact_traced_edge_colour_within_house = "blue"
-        self.contact_traced_edge_between_house = "magenta"
-        self.app_traced_edge = "green"
-        self.default_edge_colour = "black"
-        self.failed_contact_tracing = "red"
+        # # Visual Parameters:
+        # self.contact_traced_edge_colour_within_house = "blue"
+        # self.contact_traced_edge_between_house = "magenta"
+        # self.app_traced_edge = "green"
+        # self.default_edge_colour = "black"
+        # self.failed_contact_tracing = "red"
 
     def contact_trace_delay(self, app_traced_edge):
         if app_traced_edge:
