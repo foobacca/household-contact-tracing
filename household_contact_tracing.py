@@ -169,6 +169,7 @@ class household_sim_contact_tracing:
 
         # Setting up for testing purposes
         self.house_dict = {}
+        self.house_count = 1
         self.time = 0
         self.G = nx.Graph()
 
@@ -393,25 +394,10 @@ class household_sim_contact_tracing:
 
                 # If the within household infection is successful:
                 for _ in range(within_household_new_infections):
-
-                    # Add a new node to the network, it will be a member of the same household that the node that infected it was
-                    node_count = nx.number_of_nodes(self.G) + 1
-
-                    # We record which node caused this infection
-                    self.G.nodes()[node]["spread_to"].append(node_count)
-
-                    # Adds the new infection to the network
-                    self.new_infection(node_count, self.G.nodes()[node]["generation"] + 1, node_household, days_since_infected)
-
-                    # Add the edge to the graph and give it the default colour
-                    self.G.add_edge(node, node_count)
-                    self.G.edges[node, node_count].update({"colour": self.default_edge_colour})
-
-                    # Decrease the number of susceptibles in that house by 1
-                    self.house_dict[node_household]['susceptibles'] -= 1
-
-                    # We record which edges are within this household for visualisation later on
-                    self.house_dict[node_household]["within_house_edges"].append((node, node_count))
+                    self.new_within_household_infection(
+                        infecting_node=node,
+                        serial_interval=days_since_infected
+                    )
 
             # Update how many contacts the node made
             self.G.nodes()[node]["outside_house_contacts_made"] += outside_household_contacts
@@ -423,6 +409,32 @@ class household_sim_contact_tracing:
                 self.new_outside_household_infection(
                     infecting_node=node,
                     serial_interval=days_since_infected)
+
+    def new_within_household_infection(self, infecting_node, serial_interval):
+        # Add a new node to the network, it will be a member of the same household that the node that infected it was
+        node_count = nx.number_of_nodes(self.G) + 1
+
+        # We record which node caused this infection
+        self.G.nodes()[infecting_node]["spread_to"].append(node_count)
+
+        infecting_node_household = self.G.nodes[infecting_node]["household"]
+
+        # Adds the new infection to the network
+        self.new_infection(node_count=node_count,
+                           generation=self.G.nodes()[infecting_node]["generation"] + 1,
+                           household=infecting_node_household,
+                           serial_interval=serial_interval)
+
+        # Add the edge to the graph and give it the default colour
+        self.G.add_edge(infecting_node, node_count)
+        self.G.edges[infecting_node, node_count].update({"colour": self.default_edge_colour})
+
+        # Decrease the number of susceptibles in that house by 1
+        self.house_dict[infecting_node_household]['susceptibles'] -= 1
+
+        # We record which edges are within this household for visualisation later on
+        self.house_dict[infecting_node_household]["within_house_edges"].append((infecting_node, node_count))
+
 
     def new_outside_household_infection(self, infecting_node, serial_interval):
         # We assume all new outside household infections are in a new household
@@ -814,7 +826,7 @@ class household_sim_contact_tracing:
         self.G = nx.Graph()
 
         # Create first household
-        self.house_count = 1
+        self.house_count = 0
         self.new_household(self.house_count, 1, None, None)
 
         # Initial values
