@@ -228,7 +228,7 @@ class household_sim_contact_tracing:
         """
         return len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"]])
 
-    def new_infection(self, node_count, generation, household, household_dict, serial_interval=None):
+    def new_infection(self, node_count, generation, household, serial_interval=None):
         """
         Adds a new infection to the graph along with the following attributes:
         t - when they were infected
@@ -277,7 +277,7 @@ class household_sim_contact_tracing:
 
         # Updates to the household dictionary
         # Each house now stores a the ID's of which nodes are stored inside the house, so that quarantining can be done at the household level
-        household_dict[household]['nodes'].append(node_count)
+        self.household_dict[household]['nodes'].append(node_count)
 
     def new_household(self, new_household_number, generation, infected_by, infected_by_node):
         """Adds a new household to the household dictionary
