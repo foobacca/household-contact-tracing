@@ -189,3 +189,155 @@ def test_get_edge_between_household():
     model.G.add_edge(1,2)
 
     assert model.get_edge_between_household(1,2) == (1,2)
+
+def test_is_app_traced():
+
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        prob_has_trace_app=1)
+
+    # household 1
+    model.new_household(
+        new_household_number=1,
+        generation=1,
+        infected_by=None,
+        infected_by_node=None)
+
+    # infection 1
+    model.new_infection(
+        node_count=1,
+        generation=1,
+        household=1)
+
+    # household 2
+    model.new_household(
+        new_household_number=2,
+        generation=2,
+        infected_by=1,
+        infected_by_node=1)
+
+    # infection 2
+    model.new_infection(
+        node_count=2,
+        generation=2,
+        household=2)
+
+    # add an edge between the infections
+    model.G.add_edge(1,2)
+    assert model.is_edge_app_traced((1,2))
+
+def test_new_outside_household_infection():
+
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        prob_has_trace_app=1)
+
+    # household 1
+    model.new_household(
+        new_household_number=1,
+        generation=1,
+        infected_by=None,
+        infected_by_node=None)
+
+    # infection 1
+    model.new_infection(
+        node_count=1,
+        generation=1,
+        household=1)
+
+    model.new_outside_household_infection(
+        infecting_node=1,
+        serial_interval=1
+    )
+
+    assert model.house_count == 2
+    assert model.G.nodes[1]["spread_to"] == [2]
+    assert model.G.has_edge(1,2)
+
+def test_within_household_infection():
+
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        prob_has_trace_app=1)
+
+    model.new_household(
+        new_household_number=1,
+        generation=1,
+        infected_by=None,
+        infected_by_node=None)
+
+    model.new_infection(
+        node_count=1,
+        generation=1,
+        household=1)
+
+    model.house_dict[1]["house_size"] = 2
+    model.house_dict[1]["susceptibles"] = 1
+
+    model.new_within_household_infection(
+        infecting_node=1,
+        serial_interval=10)
+    
+    assert model.house_dict[1]["susceptibles"] == 0
+    assert model.G.nodes[1]["spread_to"] == [2]
+    assert model.G.nodes[2]["household"] == 1
+    assert model.G.nodes[2]["serial_interval"] == 10
+    assert model.G.nodes[2]["generation"] == 2
+    assert model.G.edges[1,2]["colour"] == "black"
+    assert model.house_dict[1]["within_house_edges"] == [(1,2)]
+
+def test_active_infections():
+
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        prob_has_trace_app=1)
+
+    model.new_household(
+        new_household_number=1,
+        generation=1,
+        infected_by=None,
+        infected_by_node=None)
+
+    model.new_infection(
+        node_count=1,
+        generation=1,
+        household=1)
+
+    assert model.active_infections == [1]
+
+    model.time = 100
+
+    assert model.active_infections == []
+
+    model.time = 1
+    model.G.nodes[1]["isolated"] = True
+
+    assert model.active_infections == []
+
+    model.G.nodes[1]["isolated"] = False
+    model.G.nodes[1]["reporting_time"] = 0
+
+    assert model.active_infections == []
+
+    
+
