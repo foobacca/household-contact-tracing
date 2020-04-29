@@ -25,7 +25,7 @@ def test_two_step():
         overdispersion=0.36,
         infection_reporting_prob=0.8,
         contact_trace=True,
-        do_2_step=True # should change the max tracing index to 2
+        do_2_step=True
     )
 
     assert model.max_tracing_index == 2
@@ -140,13 +140,13 @@ def test_new_household():
     model.time = 100
 
     model.new_household(new_household_number=10,
-        generation=5,
-        infected_by=6,
-        infected_by_node=3)
+                        generation=5,
+                        infected_by=6,
+                        infected_by_node=3)
 
     house = model.house_dict[10]
 
-    assert house["size"] in [1,2,3,4,5,6]
+    assert house["size"] in [1, 2, 3, 4, 5, 6]
     assert house["time"] == 100
     assert house["size"] - 1 == house["susceptibles"]
     assert house["generation"] == 5
@@ -191,9 +191,10 @@ def test_get_edge_between_household():
         household=2)
 
     # add an edge between the infections
-    model.G.add_edge(1,2)
+    model.G.add_edge(1, 2)
 
-    assert model.get_edge_between_household(1,2) == (1,2)
+    assert model.get_edge_between_household(1, 2) == (1, 2)
+
 
 def test_is_app_traced():
 
@@ -233,8 +234,8 @@ def test_is_app_traced():
         household=2)
 
     # add an edge between the infections
-    model.G.add_edge(1,2)
-    assert model.is_edge_app_traced((1,2))
+    model.G.add_edge(1, 2)
+    assert model.is_edge_app_traced((1, 2))
 
 
 def test_new_outside_household_infection():
@@ -268,7 +269,7 @@ def test_new_outside_household_infection():
 
     assert model.house_count == 2
     assert model.G.nodes[1]["spread_to"] == [2]
-    assert model.G.has_edge(1,2)
+    assert model.G.has_edge(1, 2)
 
 
 def test_within_household_infection():
@@ -299,14 +300,14 @@ def test_within_household_infection():
     model.new_within_household_infection(
         infecting_node=1,
         serial_interval=10)
-    
+
     assert model.house_dict[1]["susceptibles"] == 0
     assert model.G.nodes[1]["spread_to"] == [2]
     assert model.G.nodes[2]["household"] == 1
     assert model.G.nodes[2]["serial_interval"] == 10
     assert model.G.nodes[2]["generation"] == 2
-    assert model.G.edges[1,2]["colour"] == "black"
-    assert model.house_dict[1]["within_house_edges"] == [(1,2)]
+    assert model.G.edges[1, 2]["colour"] == "black"
+    assert model.house_dict[1]["within_house_edges"] == [(1, 2)]
 
 
 def test_perform_recoveries():
@@ -333,7 +334,7 @@ def test_perform_recoveries():
 
     model.G.nodes[1]["recovery_time"] = 0
     model.perform_recoveries()
-    assert model.G.nodes[1]["recovered"] == True
+    assert model.G.nodes[1]["recovered"] is True
 
 
 def test_colour_edges_between_houses():
@@ -381,4 +382,3 @@ def test_overide_testing_delay():
         test_before_propagate_tracing=False)
 
     assert model.testing_delay() == 0
-
