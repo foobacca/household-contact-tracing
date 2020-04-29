@@ -1,6 +1,10 @@
 import household_contact_tracing as hct    # The code to test
 import numpy as np
 
+# generate coverage report using:
+# pytest --cov=. --cov-report xml:cov.xml
+# in the terminal
+
 test_model = hct.household_sim_contact_tracing(
     haz_rate_scale=0.805,
     contact_tracing_success_prob=0.66,
@@ -301,7 +305,7 @@ def test_within_household_infection():
     assert model.G.edges[1,2]["colour"] == "black"
     assert model.house_dict[1]["within_house_edges"] == [(1,2)]
 
-def test_active_infections():
+def test_perform_recoveries():
 
     model = hct.household_sim_contact_tracing(
         haz_rate_scale=0.805,
@@ -323,21 +327,38 @@ def test_active_infections():
         generation=1,
         household=1)
 
-    assert model.active_infections == [1]
+    model.G.nodes[1]["recovery_time"] = 0
+    model.perform_recoveries()
+    assert model.G.nodes[1]["recovered"] == True
 
-    model.time = 100
+def test_colour_edges_between_houses():
 
-    assert model.active_infections == []
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        prob_has_trace_app=1)
 
-    model.time = 1
-    model.G.nodes[1]["isolated"] = True
+    model.new_household(
+        new_household_number=1,
+        generation=1,
+        infected_by=None,
+        infected_by_node=None)
 
-    assert model.active_infections == []
+    model.new_infection(
+        node_count=1,
+        generation=1,
+        household=1)
 
-    model.G.nodes[1]["isolated"] = False
-    model.G.nodes[1]["reporting_time"] = 0
+    model.node_count = 2
 
-    assert model.active_infections == []
+    model.new_outside_household_infection(
+        infecting_node=1,
+        serial_interval=10
+    )
 
-    
-
+    model.colour_node_edges_between_houses(1,2, "yellow")
+    assert model.G.edges[1,2]["colour"] == "yellow"
