@@ -745,10 +745,6 @@ class household_sim_contact_tracing:
             for edge in self.house_dict[household_number]["within_house_edges"]
         ]
 
-        # If we do not wait for test results to come back, then immediately propagate the tracing
-        if self.test_before_propagate_tracing is False:
-            self.propagate_contact_tracing(household_number)
-
     def propagate_contact_tracing(self, household_number):
         """
         To be called after a node in a household either reports their symptoms, and gets tested, when a household that is under surveillance develops symptoms + gets tested.
