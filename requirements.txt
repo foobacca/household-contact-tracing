@@ -5,3 +5,5 @@ numpy
 pygraphviz
 sklearn
 pydot
+pytest
+pytest-cov
