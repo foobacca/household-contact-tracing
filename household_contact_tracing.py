@@ -133,7 +133,7 @@ class household_sim_contact_tracing:
                  reduce_contacts_by=1,
                  prob_has_trace_app=0,
                  test_delay_mean=1.52,
-                 test_before_propagate_tracing=False):
+                 test_before_propagate_tracing=True):
         """Initializes parameters and distributions for performing a simulation of contact tracing.
         The epidemic is modelled as a branching process, with nodes assigned to households.
 
@@ -201,9 +201,12 @@ class household_sim_contact_tracing:
             scale=self.ip_scale))
 
     def testing_delay(self):
-        return round(npr.gamma(
-            shape=self.test_delay_mean**2/1.11**2,
-            scale=1.11**2/self.test_delay_mean))
+        if self.test_before_propagate_tracing is False:
+            return 0
+        else:
+            return round(npr.gamma(
+                shape=self.test_delay_mean**2 / 1.11**2,
+                scale=1.11**2 / self.test_delay_mean))
 
     def reporting_delay(self):
         return round(npr.gamma(
@@ -518,7 +521,7 @@ class household_sim_contact_tracing:
         [
             self.propagate_contact_tracing(self.G.nodes[node]["household"])
             for node in self.G.nodes()
-            if (self.G.nodes[node]["symptom_onset"] <= self.time
+            if (self.G.nodes[node]["symptom_onset"] <= self.time and
                 self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False and
                 self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time)
         ]
@@ -735,13 +738,13 @@ class household_sim_contact_tracing:
                 self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.app_traced_edge)
             else:
                 self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.contact_traced_edge_between_house)
-        
+
         # We update the colour of every edge so that we can tell which household have been contact traced when we visualise
         [
-                self.G.edges[edge[0], edge[1]].update({"colour": self.contact_traced_edge_colour_within_house})
-                for edge in self.house_dict[household_number]["within_house_edges"]
+            self.G.edges[edge[0], edge[1]].update({"colour": self.contact_traced_edge_colour_within_house})
+            for edge in self.house_dict[household_number]["within_house_edges"]
         ]
-        
+
         # If we do not wait for test results to come back, then immediately propagate the tracing
         if self.test_before_propagate_tracing is False:
             self.propagate_contact_tracing(household_number)
@@ -759,14 +762,14 @@ class household_sim_contact_tracing:
         infected_by = self.house_dict[household_number]["infected_by"]
 
         # If infected by = None, then it is the origin node, a special case
-        if infected_by == None:
+        if infected_by is None:
             is_infector_traced = True
         else:
             is_infector_traced = self.house_dict[infected_by]["isolated"]
-            
-        if is_infector_traced == False:
+
+        if is_infector_traced is False:
             self.attempt_contact_trace_of_household(infected_by, household_number)
-        
+
         # Contact tracing for the households infected by the household currently traced
         child_households = self.house_dict[household_number]["spread_to"]
 

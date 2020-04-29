@@ -12,7 +12,8 @@ test_model = hct.household_sim_contact_tracing(
     overdispersion=0.36,
     infection_reporting_prob=0.8,
     contact_trace=True,
-    do_2_step=True
+    do_2_step=True,
+    test_before_propagate_tracing=True
 )
 
 
@@ -24,7 +25,7 @@ def test_two_step():
         overdispersion=0.36,
         infection_reporting_prob=0.8,
         contact_trace=True,
-        do_2_step=True
+        do_2_step=True # should change the max tracing index to 2
     )
 
     assert model.max_tracing_index == 2
@@ -145,7 +146,7 @@ def test_new_household():
 
     house = model.house_dict[10]
 
-    assert house["size"] in list(range(6))
+    assert house["size"] in [1,2,3,4,5,6]
     assert house["time"] == 100
     assert house["size"] - 1 == house["susceptibles"]
     assert house["generation"] == 5
@@ -235,6 +236,7 @@ def test_is_app_traced():
     model.G.add_edge(1,2)
     assert model.is_edge_app_traced((1,2))
 
+
 def test_new_outside_household_infection():
 
     model = hct.household_sim_contact_tracing(
@@ -267,6 +269,7 @@ def test_new_outside_household_infection():
     assert model.house_count == 2
     assert model.G.nodes[1]["spread_to"] == [2]
     assert model.G.has_edge(1,2)
+
 
 def test_within_household_infection():
 
@@ -305,6 +308,7 @@ def test_within_household_infection():
     assert model.G.edges[1,2]["colour"] == "black"
     assert model.house_dict[1]["within_house_edges"] == [(1,2)]
 
+
 def test_perform_recoveries():
 
     model = hct.household_sim_contact_tracing(
@@ -330,6 +334,7 @@ def test_perform_recoveries():
     model.G.nodes[1]["recovery_time"] = 0
     model.perform_recoveries()
     assert model.G.nodes[1]["recovered"] == True
+
 
 def test_colour_edges_between_houses():
 
@@ -360,5 +365,20 @@ def test_colour_edges_between_houses():
         serial_interval=10
     )
 
-    model.colour_node_edges_between_houses(1,2, "yellow")
-    assert model.G.edges[1,2]["colour"] == "yellow"
+    model.colour_node_edges_between_houses(1, 2, "yellow")
+    assert model.G.edges[1, 2]["colour"] == "yellow"
+
+
+def test_overide_testing_delay():
+
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        test_before_propagate_tracing=False)
+
+    assert model.testing_delay() == 0
+
