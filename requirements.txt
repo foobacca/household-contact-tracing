@@ -4,6 +4,7 @@ networkx
 numpy
 pygraphviz
 sklearn
+scipy
 pydot
 pytest
 pytest-cov
