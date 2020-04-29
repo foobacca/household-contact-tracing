@@ -343,9 +343,9 @@ class household_sim_contact_tracing:
     def active_infections(self):
         return [
             node for node in self.G.nodes()
-            if self.G.nodes[node]["isolated"] is False
-            and self.G.nodes[node]["reporting_time"] >= self.time
-            and self.G.nodes[node]["recovered"] is False
+            if (self.G.nodes[node]["isolated"] is False and
+                self.G.nodes[node]["reporting_time"] >= self.time and
+                self.G.nodes[node]["recovered"] is False)
         ]
 
     def increment_infection(self, node_count):
@@ -482,8 +482,7 @@ class household_sim_contact_tracing:
             for house in self.house_dict
             if (
                 self.house_dict[house]["time_until_contact_traced"] <= self.time and
-                self.house_dict[house]["contact_traced"] is False
-            )
+                self.house_dict[house]["contact_traced"] is False)
         ]
 
         # Isolate all non isolated households where the infection has been reported
@@ -495,6 +494,7 @@ class household_sim_contact_tracing:
         ]
 
         # Isolate all households under observation that now display symptoms
+        # TODO can this be removed?
         [
             self.isolate_household(self.G.nodes[node]["household"])
             for node in self.G.nodes()
@@ -505,40 +505,39 @@ class household_sim_contact_tracing:
 
         # Look for houses that need to propagate the contact tracing because their test result has come back
         # Necessary conditions: household isolated, symptom onset + testing delay = time
-        if self.test_before_propagate_tracing is True:
 
-            # Propagate the contact tracing for all households that self-reported and have had their test results come back
+        # Propagate the contact tracing for all households that self-reported and have had their test results come back
+        [
+            self.propagate_contact_tracing(self.G.nodes[node]["household"])
+            for node in self.G.nodes() 
+            if (self.G.nodes[node]["reporting_time"] + self.G.nodes[node]["testing_delay"] == self.time and
+                self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False)
+        ]
+
+        # Propagate the contact tracing for all households that are isolated due to exposure, have developed symptoms and had a test come back
+        [
+            self.propagate_contact_tracing(self.G.nodes[node]["household"])
+            for node in self.G.nodes()
+            if (self.G.nodes[node]["symptom_onset"] <= self.time
+                self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False and
+                self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time)
+        ]
+
+        # Update the contact tracing index of households
+        # That is, re-evaluate how far away they are from a known infected case (traced + symptom_onset + testing_delay)
+        self.update_contact_tracing_index()
+
+        if self.do_2_step:
+
+            # Propagate the contact tracing from any households with a contact tracing index of 1
             [
-                self.propagate_contact_tracing(self.G.nodes[node]["household"]) 
-                for node in self.G.nodes() 
-                if (self.G.nodes[node]["reporting_time"] + self.G.nodes[node]["testing_delay"] == self.time and
-                    self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False)
+                self.propagate_contact_tracing(household)
+                for household in self.house_dict if (
+                    self.house_dict[household]["contact_tracing_index"] == 1 and
+                    self.house_dict[household]["propagated_contact_tracing"] is False and
+                    self.house_dict[household]["isolated"] is True
+                )
             ]
-
-            # Propagate the contact tracing for all households that are isolated due to exposure, have developed symptoms and had a test come back
-            [
-                self.propagate_contact_tracing(self.G.nodes[node]["household"])
-                for node in self.G.nodes()
-                if (self.G.nodes[node]["symptom_onset"] <= self.time
-                    self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False and
-                    self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time)
-            ]
-
-            # Update the contact tracing index of households
-            # That is, re-evaluate how far away they are from a known infected case (traced + symptom_onset + testing_delay)
-            self.update_contact_tracing_index()
-
-            if self.do_2_step:
-
-                # Propagate the contact tracing from any households with a contact tracing index of 1
-                [
-                    self.propagate_contact_tracing(household)
-                    for household in self.house_dict if (
-                        self.house_dict[household]["contact_tracing_index"] == 1 and
-                        self.house_dict[household]["propagated_contact_tracing"] is False and
-                        self.house_dict[household]["isolated"] is True
-                    )
-                ]
 
         
         # # The following chunk of code is to record counts of how many contacts must be traced, used for evaluating when capacity is reached
@@ -744,7 +743,7 @@ class household_sim_contact_tracing:
         ]
         
         # If we do not wait for test results to come back, then immediately propagate the tracing
-        if self.test_before_propagate_tracing == False:
+        if self.test_before_propagate_tracing is False:
             self.propagate_contact_tracing(household_number)
 
     def propagate_contact_tracing(self, household_number):
@@ -806,7 +805,7 @@ class household_sim_contact_tracing:
         """
         node_count = nx.number_of_nodes(self.G)
         self.increment_infection(node_count)
-        if self.contact_trace == True:
+        if self.contact_trace is True:
             for _ in range(5):
                 self.increment_contact_tracing()
         self.perform_recoveries()
