@@ -6,7 +6,7 @@ import itertools
 
 # npr.seed(1)
 
-repeats = 10
+repeats = 10000
 days_to_simulate = 90
 
 param_names = [
@@ -21,7 +21,10 @@ param_names = [
     "testing_delay_mean"
 ]
 
-#col_names = param_names + [str(i) for i in range(21)]
+col_names = param_names + [str(i) for i in range(days_to_simulate)]
+col_names_dict = {}
+for i in range(len(col_names)):
+    col_names_dict.update({i: col_names[i]})
 
 R_0_range = [2.6, 2.8, 3.0]
 haz_rate_range = [0.829253, 0.816518, 0.803782]
@@ -80,6 +83,5 @@ if __name__ == '__main__':
     with Pool(14) as p:
         results = p.map(run_simulation, range(repeats))
         results = pd.DataFrame(results)
-        results.to_excel("Data/simulation_results.xlsx"
-                         # , columns = col_names
-                         )
+        results = results.rename(columns=col_names_dict)
+        results.to_excel("Data/simulation_results_test_delays.xlsx")
