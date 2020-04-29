@@ -6,7 +6,7 @@ import itertools
 
 # npr.seed(1)
 
-repeats = 10000
+repeats = 10
 days_to_simulate = 90
 
 param_names = [
@@ -18,8 +18,7 @@ param_names = [
     "global_contact_reduction",
     "2_step_tracing",
     "prob_has_trace_app",
-    "testing_delay_mean",
-    "epidemic_died_out"
+    "testing_delay_mean"
 ]
 
 #col_names = param_names + [str(i) for i in range(21)]
