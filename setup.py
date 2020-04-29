@@ -11,5 +11,5 @@ setup(
    #url="http://www.foopackage.com/",
    packages=['household-contact-tracing'],  #same as name
    install_requires=['networkx', 'numpy', 'scipy', 'matplotlib', 'pytest', 'pydot'], #external packages as dependencies
-   py_modules = ['household_contact_tracing']
+   #py_modules = ['household_contact_tracing']
 )
