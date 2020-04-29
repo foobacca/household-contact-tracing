@@ -112,7 +112,7 @@ class household_sim_contact_tracing:
     # Working out the parameters of the incubation period
     ip_mean = 4.83
     ip_var = 2.78**2
-    ip_scale = ip_var/ip_mean
+    ip_scale = ip_var / ip_mean
     ip_shape = ip_mean ** 2 / ip_var
 
     # Visual Parameters:
@@ -129,7 +129,6 @@ class household_sim_contact_tracing:
                  overdispersion,
                  infection_reporting_prob,
                  contact_trace,
-                 only_isolate_if_symptoms=False,
                  do_2_step=False,
                  reduce_contacts_by=1,
                  prob_has_trace_app=0,
@@ -149,9 +148,9 @@ class household_sim_contact_tracing:
 
         # Size biased distribution of households (choose a node, what is the prob they are in a house size 6, this is 
         # biased by the size of the house)
-        size_biased_distribution = [(i+1)*house_size_probs[i] for i in range(6)]
+        size_biased_distribution = [(i + 1) * house_size_probs[i] for i in range(6)]
         total = sum(size_biased_distribution)
-        self.size_biased_distribution = [prob/total for prob in size_biased_distribution]
+        self.size_biased_distribution = [prob / total for prob in size_biased_distribution]
 
         # The mean number of contacts made by each household
         means = [8.87, 10.65, 12.87, 15.84, 16.47, 17.69]
@@ -182,7 +181,6 @@ class household_sim_contact_tracing:
         self.contact_trace = contact_trace
         self.prob_has_trace_app = prob_has_trace_app
         self.reduce_contacts_by = reduce_contacts_by
-        self.only_isolate_if_symptoms = only_isolate_if_symptoms
         self.do_2_step = do_2_step
         self.test_before_propagate_tracing = test_before_propagate_tracing
         self.test_delay_mean = test_delay_mean
@@ -479,42 +477,52 @@ class household_sim_contact_tracing:
         """
 
         # Update the contact traced status for all households that have had the contact tracing process get there
-        [self.contact_trace_household(house) for house in self.house_dict if (self.house_dict[house]["time_until_contact_traced"] <= self.time 
-                                                                                and self.house_dict[house]["contact_traced"] == False)]
-        
-        # Isolate all non isolated households where the infection has been reported
-        [   
-            self.isolate_household(self.G.nodes()[node]["household"]) 
-            for node in self.G.nodes() 
-            if (self.G.nodes()[node]["reporting_time"] <= self.time
-            and self.G.nodes()[node]["isolated"] == False)
+        [
+            self.contact_trace_household(house)
+            for house in self.house_dict
+            if (
+                self.house_dict[house]["time_until_contact_traced"] <= self.time and
+                self.house_dict[house]["contact_traced"] is False
+            )
         ]
-        
+
+        # Isolate all non isolated households where the infection has been reported
+        [
+            self.isolate_household(self.G.nodes()[node]["household"])
+            for node in self.G.nodes()
+            if (self.G.nodes()[node]["reporting_time"] <= self.time and
+                self.G.nodes()[node]["isolated"] is False)
+        ]
+
         # Isolate all households under observation that now display symptoms
         [
-            self.isolate_household(self.G.nodes[node]["household"]) 
-            for node in self.G.nodes() 
-            if (self.G.nodes[node]["symptom_onset"] <= self.time
-            and self.G.nodes[node]["contact_traced"] == True
-            and self.G.nodes[node]["isolated"] == False)
+            self.isolate_household(self.G.nodes[node]["household"])
+            for node in self.G.nodes()
+            if (self.G.nodes[node]["symptom_onset"] <= self.time and
+                self.G.nodes[node]["contact_traced"] is True and
+                self.G.nodes[node]["isolated"] is False)
         ]
 
         # Look for houses that need to propagate the contact tracing because their test result has come back
         # Necessary conditions: household isolated, symptom onset + testing delay = time
-        if self.test_before_propagate_tracing == True:
+        if self.test_before_propagate_tracing is True:
 
             # Propagate the contact tracing for all households that self-reported and have had their test results come back
-            [self.propagate_contact_tracing(self.G.nodes[node]["household"]) for node in self.G.nodes() if (
-                self.G.nodes[node]["reporting_time"] + self.G.nodes[node]["testing_delay"] == self.time
-                and self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] == False
-            )]
+            [
+                self.propagate_contact_tracing(self.G.nodes[node]["household"]) 
+                for node in self.G.nodes() 
+                if (self.G.nodes[node]["reporting_time"] + self.G.nodes[node]["testing_delay"] == self.time and
+                    self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False)
+            ]
 
             # Propagate the contact tracing for all households that are isolated due to exposure, have developed symptoms and had a test come back
-            [self.propagate_contact_tracing(self.G.nodes[node]["household"]) for node in self.G.nodes() if (
-                self.G.nodes[node]["symptom_onset"] <= self.time
-                and self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] == False
-                and self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time
-            )]
+            [
+                self.propagate_contact_tracing(self.G.nodes[node]["household"])
+                for node in self.G.nodes()
+                if (self.G.nodes[node]["symptom_onset"] <= self.time
+                    self.house_dict[self.G.nodes[node]["household"]]["propagated_contact_tracing"] is False and
+                    self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + self.G.nodes[node]["testing_delay"] <= self.time)
+            ]
 
             # Update the contact tracing index of households
             # That is, re-evaluate how far away they are from a known infected case (traced + symptom_onset + testing_delay)
@@ -524,10 +532,11 @@ class household_sim_contact_tracing:
 
                 # Propagate the contact tracing from any households with a contact tracing index of 1
                 [
-                    self.propagate_contact_tracing(household) for household in self.house_dict if (
-                        self.house_dict[household]["contact_tracing_index"] == 1
-                        and self.house_dict[household]["propagated_contact_tracing"] == False
-                        and self.house_dict[household]["isolated"] == True
+                    self.propagate_contact_tracing(household)
+                    for household in self.house_dict if (
+                        self.house_dict[household]["contact_tracing_index"] == 1 and
+                        self.house_dict[household]["propagated_contact_tracing"] is False and
+                        self.house_dict[household]["isolated"] is True
                     )
                 ]
 
