@@ -32,11 +32,11 @@ def weibull_pdf(t):
 
 
 def weibull_hazard(t):
-    return (gen_shape / gen_scale)*(t / gen_scale)**(gen_shape - 1)
+    return (gen_shape / gen_scale) * (t / gen_scale)**(gen_shape - 1)
 
 
 def weibull_survival(t):
-    return math.exp(-(t/gen_scale)**gen_shape)
+    return math.exp(-(t / gen_scale)**gen_shape)
 
 
 # Probability of a contact causing infection
@@ -59,9 +59,9 @@ def unconditional_hazard_rate(t, survive_forever):
     Notes:
     Currently this is using a weibull distribution, as an example.
     """
-    unconditional_pdf = (1-survive_forever)*weibull_pdf(t)
-    unconditional_survival = (1-survive_forever)*weibull_survival(t) + survive_forever
-    return unconditional_pdf/unconditional_survival
+    unconditional_pdf = (1 - survive_forever) * weibull_pdf(t)
+    unconditional_survival = (1 - survive_forever) * weibull_survival(t) + survive_forever
+    return unconditional_pdf / unconditional_survival
 
 
 def current_prob_infection(t, survive_forever):
@@ -85,10 +85,10 @@ def negbin_pdf(x, m, a):
     m = mean
     a = overdispertion
     """
-    A = math.gamma(x + 1/a)/(math.gamma(x + 1)*math.gamma(1/a))
-    B = (1/(1 + a*m))**(1/a)
-    C = (a*m/(1 + a*m))**x
-    return A*B*C
+    A = math.gamma(x + 1 / a) / (math.gamma(x + 1) * math.gamma(1 / a))
+    B = (1 / (1 + a * m))**(1 / a)
+    C = (a * m / (1 + a * m))**x
+    return A * B * C
 
 
 def compute_negbin_cdf(mean, overdispersion, length_out):
@@ -435,7 +435,6 @@ class household_sim_contact_tracing:
 
         # We record which edges are within this household for visualisation later on
         self.house_dict[infecting_node_household]["within_house_edges"].append((infecting_node, node_count))
-
 
     def new_outside_household_infection(self, infecting_node, serial_interval):
         # We assume all new outside household infections are in a new household
