@@ -357,8 +357,7 @@ class household_sim_contact_tracing:
     def active_infections(self):
         return [
             node for node in self.G.nodes()
-            if (self.G.nodes[node]["isolated"] is False and
-                self.G.nodes[node]["reporting_time"] >= self.time and
+            if (self.G.nodes[node]["reporting_time"] >= self.time and
                 self.G.nodes[node]["recovered"] is False)
         ]
 
@@ -385,7 +384,10 @@ class household_sim_contact_tracing:
 
             # Work out how many contacts were with other households
             # If social distancing is in play, global contacts are reduced by
-            outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
+            if self.G.nodes[node]["isolated"] is False:
+                outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
+            else:
+                outside_household_contacts = 0
 
             # Within household, how many of the infections would cause new infections
             # These contacts may be made with someone who is already infected, and so they will again be thinned
