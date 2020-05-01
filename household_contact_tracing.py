@@ -311,7 +311,10 @@ class household_sim_contact_tracing:
             infected_by {int} -- Which household spread the infection to this household
             infected_by_node {int} -- Which node spread the infection to this household
         """
-        house_size = self.size_of_household()  # Added one because we do not have size 0 households
+        house_size = self.size_of_household()
+
+        propensity = self.hh_propensity_to_leave_isolation()
+
         self.house_dict.update({new_household_number:
                                 { 
                                     "size": house_size,                  # Size of the household
@@ -319,6 +322,7 @@ class household_sim_contact_tracing:
                                     "susceptibles": house_size - 1,      # How many susceptibles remain in the household
                                     "isolated": False,                   # Has the household been isolated, so there can be no more infections from this household
                                     "isolated_time": float('inf'),       # When the house was isolated
+                                    "propensity_to_leave_isolation": propensity,
                                     "contact_traced": False,             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
                                     "time_until_contact_traced": float('inf'),# The time until quarantine, calculated from contact tracing processes on connected households
                                     "contact_traced_households": [],     # The list of households contact traced from this one
