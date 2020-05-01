@@ -757,6 +757,27 @@ class household_sim_contact_tracing:
             for edge in self.house_dict[household_number]["within_house_edges"]
         ]
 
+    def decide_if_leave_isolation(self, node):
+        """
+        If a node lives in a household with the propensity to not adhere to isolation, then this
+        function decides if the node will leave isolation, conditional upon how many days it's been
+        since the node was isolated.
+
+        Only makes sense to apply this function to isolated nodes, in a household with propensity to
+        leave isolation
+        """
+        household = self.G.nodes[node]["household"]
+
+        days_isolated = self.time - self.house_dict[household]["isolated_time"]
+
+        # TODO make this a proper distribution
+        current_prob_leave_isolation = 0.1
+
+        if npr.binomial(1, current_prob_leave_isolation) == 1:
+            self.G.nodes[node].update({"isolated": False})
+
+
+
     def propagate_contact_tracing(self, household_number):
         """
         To be called after a node in a household either reports their symptoms, and gets tested, when a household that is under surveillance develops symptoms + gets tested.

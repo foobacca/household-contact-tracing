@@ -418,3 +418,26 @@ def test_hh_has_propensity_attr():
         hh_prob_propensity_to_leave_isolation=0.5)
 
     assert model.house_dict[1]["propensity_to_leave_isolation"] in (True, False)
+
+def test_leave_isolation():
+
+    # All households have the propensity
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        test_before_propagate_tracing=False,
+        hh_prob_propensity_to_leave_isolation=1)
+
+    # set node 1 to the isolation status
+    model.G.nodes[1]["isolated"] = True
+
+    # see if the node leaves isolation over the next 50 days
+    for _ in range(50):
+        model.decide_if_leave_isolation(node = 1)
+        model.time += 1
+
+    assert model.G.nodes[1]["isolated"] == False
