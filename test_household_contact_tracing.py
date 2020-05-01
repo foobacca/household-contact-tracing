@@ -382,3 +382,26 @@ def test_overide_testing_delay():
         test_before_propagate_tracing=False)
 
     assert model.testing_delay() == 0
+
+def test_hh_prob_leave_iso_default():
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        test_before_propagate_tracing=False)
+    assert model.hh_propensity_to_leave_isolation() == 0
+
+def test_hh_prob_leave_iso():
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.805,
+        contact_tracing_success_prob=0.66,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.8,
+        contact_trace=True,
+        test_before_propagate_tracing=False,
+        hh_prob_propensity_to_leave_isolation=1)
+    assert model.hh_propensity_to_leave_isolation() == 1

@@ -134,7 +134,8 @@ class household_sim_contact_tracing:
                  prob_has_trace_app=0,
                  test_delay_mean=1.52,
                  test_before_propagate_tracing=True,
-                 starting_infections=1):
+                 starting_infections=1,
+                 hh_prob_propensity_to_leave_isolation=0):
         """Initializes parameters and distributions for performing a simulation of contact tracing.
         The epidemic is modelled as a branching process, with nodes assigned to households.
 
@@ -180,6 +181,7 @@ class household_sim_contact_tracing:
         self.test_before_propagate_tracing = test_before_propagate_tracing
         self.test_delay_mean = test_delay_mean
         self.starting_infections = starting_infections
+        self.hh_prob_propensity_to_leave_isolation = hh_prob_propensity_to_leave_isolation
         if do_2_step:
             self.max_tracing_index = 2
         else:
@@ -211,6 +213,12 @@ class household_sim_contact_tracing:
         return round(npr.gamma(
             shape=2.62**2/2.38**2,
             scale=2.38**2/2.62))
+
+    def hh_propensity_to_leave_isolation(self):
+        if npr.binomial(1, self.hh_prob_propensity_to_leave_isolation) == 1:
+            return True
+        else:
+            return False
 
     def contacts_made_today(self, household_size):
         """Generates the number of contacts made today by a node, given the house size of the node. Uses an 
