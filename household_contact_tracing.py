@@ -354,7 +354,6 @@ class household_sim_contact_tracing:
         """
         Creates a new days worth of infections
         """
-        node_count = nx.number_of_nodes(self.G)
 
         for node in self.active_infections:
 
