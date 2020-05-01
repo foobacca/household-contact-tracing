@@ -133,7 +133,8 @@ class household_sim_contact_tracing:
                  reduce_contacts_by=1,
                  prob_has_trace_app=0,
                  test_delay_mean=1.52,
-                 test_before_propagate_tracing=True):
+                 test_before_propagate_tracing=True,
+                 starting_infections=1):
         """Initializes parameters and distributions for performing a simulation of contact tracing.
         The epidemic is modelled as a branching process, with nodes assigned to households.
 
@@ -166,12 +167,6 @@ class household_sim_contact_tracing:
             6: compute_negbin_cdf(means[5], overdispersion, 100)
         }
 
-        # Setting up for testing purposes
-        self.house_dict = {}
-        self.house_count = 1
-        self.time = 0
-        self.G = nx.Graph()
-
         # Parameter Inputs:
         self.haz_rate_scale = haz_rate_scale
         self.contact_tracing_success_prob = contact_tracing_success_prob
@@ -184,10 +179,14 @@ class household_sim_contact_tracing:
         self.do_2_step = do_2_step
         self.test_before_propagate_tracing = test_before_propagate_tracing
         self.test_delay_mean = test_delay_mean
+        self.starting_infections = starting_infections
         if do_2_step:
             self.max_tracing_index = 2
         else:
             self.max_tracing_index = 1
+
+        # Calls the simulation reset function, which creates all the required dictionaries
+        self.reset_simulation()
 
     def contact_trace_delay(self, app_traced_edge):
         if app_traced_edge:
@@ -809,7 +808,11 @@ class household_sim_contact_tracing:
         self.perform_recoveries()
         self.time += 1
 
-    def run_simulation_hitting_times(self, time_out):
+    def reset_simulation(self):
+        """
+        Returns the simulation to it's initially specified values
+        """
+
         self.time = 0
 
         # Stores information about the households.
@@ -817,27 +820,41 @@ class household_sim_contact_tracing:
 
         # Stores information about the contact tracing that has occurred.
         self.contact_tracing_dict = {
-                "contacts_to_be_traced": 0,         # connections made by nodes that are contact traced and symptomatic
-                "possible_to_trace_contacts": 0,    # contacts that are possible to trace assuming a failure rate, not all connections will be traceable
-                "total_traced_each_day": [0],       # A list recording the the number of contacts added to the system each day
-                "daily_active_surveillances": [],   # A list recording how many surveillances were happening each day
-                "currently_being_surveilled": 0,    # Ongoing surveillances
-                "day_800_cases_traced": None        # On which day was 800 cases reached
-            }
-
-        # For recording the number of cases over time
-        total_cases = []
+            "contacts_to_be_traced": 0,         # connections made by nodes that are contact traced and symptomatic
+            "possible_to_trace_contacts": 0,    # contacts that are possible to trace assuming a failure rate, not all connections will be traceable
+            "total_traced_each_day": [0],       # A list recording the the number of contacts added to the system each day
+            "daily_active_surveillances": [],   # A list recording how many surveillances were happening each day
+            "currently_being_surveilled": 0,    # Ongoing surveillances
+            "day_800_cases_traced": None        # On which day was 800 cases reached
+        }
 
         # Create the empty graph
         self.G = nx.Graph()
 
         # Create first household
         self.house_count = 0
-        self.new_household(self.house_count, 1, None, None)
 
         # Initial values
         node_count = 1
         generation = 0
+
+        # Create the starting infectives
+        for _ in range(self.starting_infections):
+            self.house_count += 1
+            node_count = nx.number_of_nodes(self.G) + 1
+            self.new_household(self.house_count, 1, None, None)
+            self.new_infection(node_count, generation, self.house_count)
+
+    def run_simulation_hitting_times(self, time_out):
+
+        # Return the simulation to it's initial starting state
+        self.reset_simulation()
+
+        # Get the number of current nodes in the network
+        node_count = nx.number_of_nodes(self.G)
+
+        # For recording the number of cases over time
+        total_cases = []
 
         # Setting up parameters for this run of the experiment
         self.time_800 = None    # Time when we hit 800 under surveillance
@@ -846,9 +863,6 @@ class household_sim_contact_tracing:
         self.hit_8000 = False   # same but for 8000
         self.died_out = False   # flag for whether the epidemic has died out
         self.timed_out = False  # flag for whether the simulation reached it's time limit without another stop condition being met
-
-        # Starting nodes/generation
-        self.new_infection(node_count, generation, self.house_count)
 
         # While loop ends when there are no non-isolated infections
         currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
@@ -885,40 +899,16 @@ class household_sim_contact_tracing:
         self.inf_counts = total_cases
 
     def run_simulation(self, time_out):
-        self.time = 0
 
-        # Stores information about the households.
-        self.house_dict = {}
-
-        # Stores information about the contact tracing that has occurred.
-        self.contact_tracing_dict = {
-                "contacts_to_be_traced": 0,         # connections made by nodes that are contact traced and symptomatic
-                "possible_to_trace_contacts": 0,    # contacts that are possible to trace assuming a failure rate, not all connections will be traceable
-                "total_traced_each_day": [0],       # A list recording the the number of contacts added to the system each day
-                "daily_active_surveillances": [],   # A list recording how many surveillances were happening each day
-                "currently_being_surveilled": 0,    # Ongoing surveillances
-                "day_800_cases_traced": None        # On which day was 800 cases reached
-            }
+        # Create all the required dictionaries and reset parameters
+        self.reset_simulation()
 
         # For recording the number of cases over time
         self.total_cases = []
 
-        # Create the empty graph
-        self.G = nx.Graph()
-
-        # Create first household
-        self.house_count = 1
-        self.new_household(self.house_count, 1, None, None)
-
         # Initial values
-        node_count = 1
-        generation = 0
         self.timed_out = False
         self.extinct = False
-
-        # Starting nodes/generation
-        self.new_infection(node_count, generation, self.house_count)
-        node_count += 1
 
         # While loop ends when there are no non-isolated infections
         currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
