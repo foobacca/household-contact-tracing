@@ -350,10 +350,11 @@ class household_sim_contact_tracing:
                 self.G.nodes[node]["recovered"] is False)
         ]
 
-    def increment_infection(self, node_count):
+    def increment_infection(self):
         """
         Creates a new days worth of infections
         """
+        node_count = nx.number_of_nodes(self.G)
 
         for node in self.active_infections:
 
@@ -800,8 +801,7 @@ class household_sim_contact_tracing:
 
         Useful for bug testing and visualisation.
         """
-        node_count = nx.number_of_nodes(self.G)
-        self.increment_infection(node_count)
+        self.increment_infection()
         if self.contact_trace is True:
             for _ in range(5):
                 self.increment_contact_tracing()
@@ -1153,3 +1153,43 @@ class model_calibration(household_sim_contact_tracing):
         g = lambda x: 1-sum([mu_global*mu_local[i]/(x**(i+1)) for i in range(6)])
         output = s.optimize.root_scalar(g, x0=1, x1=4)
         return output.root
+
+    def estimate_secondary_attack_rate(self):
+        """Simulates a household epidemic, with a single starting case. Outside household infections are performed but will not propagate.
+        """
+
+        # Reset the simulation to it's initial state
+        self.reset_simulation()
+
+        # Initial households are allowed to run the household epidemics
+        starting_households = list(range(1, self.starting_infections))
+
+        while len(self.active_infections) is not 0:
+
+            # Increment the infection process
+            self.increment_infection()
+
+            # recover nodes that need it
+            self.perform_recoveries()
+
+            # set any node that was an outside-household infection to the recovered state, so that they are not simulated.
+            [
+                self.G.nodes[node].update({"recovered": True})
+                for node in self.G.nodes()
+                if self.G.nodes[node]["household"] not in starting_households
+                and self.G.nodes[node]["recovered"] is False
+            ]
+
+            self.time += 1
+
+        total_infected = sum([
+            len(self.house_dict[house]["nodes"]) - 1
+            for house in starting_households
+        ])
+
+        total_exposed = sum([
+            self.house_dict[house]["size"] - 1
+            for house in starting_households
+        ])
+
+        return total_infected/total_exposed
