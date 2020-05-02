@@ -76,6 +76,19 @@ def current_prob_infection(t, survive_forever):
     return si.quad(lambda t: unconditional_hazard_rate(t, survive_forever), t, t+1)[0]
 
 
+def current_prob_leave_isolation(t, survive_forever):
+    """Integrates over the unconditional hazard rate to get the probability of a contact causing infection on day t.
+
+    survive_forever controls the probability that an infection never occurs, and is important to set R0.
+
+    Arguments:
+        t {int} -- current day
+        survive_forever {float} -- rescales the hazard rate so that it is possible to not be infected
+    """
+    return si.quad(lambda t: unconditional_hazard_rate(t, survive_forever), t, t+1)[0]
+
+
+
 def negbin_pdf(x, m, a):
     """
     We need to draw values from an overdispersed negative binomial distribution, with non-integer inputs. Had to 
@@ -773,11 +786,8 @@ class household_sim_contact_tracing:
         Only makes sense to apply this function to isolated nodes, in a household with propensity to
         leave isolation
         """
-
-        # TODO make this a proper distribution conditioned on time
-        current_prob_leave_isolation = 0.1
-
-        if npr.binomial(1, current_prob_leave_isolation) == 1:
+        prob_leave_isolation = 0.1
+        if npr.binomial(1, prob_leave_isolation) == 1:
             self.G.nodes[node].update({"isolated": False})
 
 
