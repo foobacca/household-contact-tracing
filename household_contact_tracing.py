@@ -834,7 +834,8 @@ class household_sim_contact_tracing:
                                 self.house_dict[index_1_hh].update({"contact_tracing_index": 1})
 
     def update_adherence_to_isolation(self):
-        """Loops over nodes currently in quarantine, and updates whether they are currently adhering to quarantine.
+        """Loops over nodes currently in quarantine, and updates whether they are currently adhering to 
+        quarantine, if their household has the propensity to not adhere.
         """
         [
             self.decide_if_leave_isolation(node)
@@ -846,7 +847,24 @@ class household_sim_contact_tracing:
                 self.house_dict[self.G.nodes[node]["household"]]["propensity_to_leave_isolation"] is True
             )
         ]
-        
+
+    def release_nodes_from_quarantine(self):
+        """If a node has completed the quarantine according to the following rules, they are released from
+        quarantine.
+
+        You are released from isolation if:
+            * it has been 7 days since your symptoms onset
+            and
+            * it has been a minimum of 14 days since your household was isolated
+        """
+        [
+            self.G.nodes[node].update({"isolated": False})
+            for node in self.G.nodes()
+            if (
+                self.time >= self.G.nodes[node]["symptom_onset"] and
+                self.time >= self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + 14
+                )
+        ]
 
     def simulate_one_day(self):
         """Simulates one day of the epidemic and contact tracing.
@@ -858,6 +876,8 @@ class household_sim_contact_tracing:
             for _ in range(5):
                 self.increment_contact_tracing()
         self.perform_recoveries()
+        self.release_nodes_from_quarantine()
+        self.update_adherence_to_isolation()
         self.time += 1
 
     def reset_simulation(self):
