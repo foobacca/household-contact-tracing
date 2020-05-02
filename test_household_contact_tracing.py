@@ -484,3 +484,23 @@ def test_update_adherence_to_isolation():
     )]
 
     assert initially_isolated != secondary_isolated
+
+def test_default_household_haz_rate_scale():
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.8,
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    assert model.household_haz_rate_scale == 0.8

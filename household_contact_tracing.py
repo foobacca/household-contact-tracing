@@ -142,6 +142,7 @@ class household_sim_contact_tracing:
                  overdispersion,
                  infection_reporting_prob,
                  contact_trace,
+                 household_haz_rate_scale=None,
                  do_2_step=False,
                  reduce_contacts_by=1,
                  prob_has_trace_app=0,
@@ -183,6 +184,12 @@ class household_sim_contact_tracing:
 
         # Parameter Inputs:
         self.haz_rate_scale = haz_rate_scale
+        # If a household hazard rate scale is not specified, we assume it is the same as the outside-household
+        # hazard rate scaling
+        if household_haz_rate_scale is None:
+            self.household_haz_rate_scale = self.haz_rate_scale
+        else:
+            self.household_haz_rate_scale = household_haz_rate_scale
         self.contact_tracing_success_prob = contact_tracing_success_prob
         self.contact_trace_delay_par = contact_trace_delay_par
         self.overdispersion = overdispersion
@@ -411,7 +418,7 @@ class household_sim_contact_tracing:
 
             # Within household, how many of the infections would cause new infections
             # These contacts may be made with someone who is already infected, and so they will again be thinned
-            within_household_potential_new_infections = npr.binomial(within_household_contacts, current_prob_infection(days_since_infected, self.haz_rate_scale))
+            within_household_potential_new_infections = npr.binomial(within_household_contacts, current_prob_infection(days_since_infected, self.household_haz_rate_scale))
 
             for _ in range(within_household_potential_new_infections):
                 # A further thinning has to happen since each attempt may choose an already infected person
@@ -1275,3 +1282,36 @@ class model_calibration(household_sim_contact_tracing):
         ])
 
         return total_infected/total_exposed
+
+    def generate_secondary_infection_distribution(self):
+
+        # Reset the simulation to it's initial state
+        self.reset_simulation()
+
+        # Initial households are allowed to run the household epidemics
+        starting_households = list(range(1, self.starting_infections))
+
+        while len(self.active_infections) is not 0:
+
+            # Increment the infection process
+            self.increment_infection()
+
+            # recover nodes that need it
+            self.perform_recoveries()
+
+            # set any node that was an outside-household infection to the recovered state, so that they are 
+            # not simulated.
+            [
+                self.G.nodes[node].update({"recovered": True})
+                for node in self.G.nodes()
+                if self.G.nodes[node]["household"] not in starting_households
+                and self.G.nodes[node]["recovered"] is False
+            ]
+
+            self.time += 1
+
+        return [
+            len(self.G.nodes[node]["spread_to"])
+            for node in self.G.nodes()
+            if self.G.nodes[node]["household"] in starting_households
+        ]
