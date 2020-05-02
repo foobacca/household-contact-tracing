@@ -302,6 +302,13 @@ class household_sim_contact_tracing:
         # Each house now stores a the ID's of which nodes are stored inside the house, so that quarantining can be done at the household level
         self.house_dict[household]['nodes'].append(node_count)
 
+        # A number of days may have passed since the house was isolated
+        # We need to decide if the node has left isolation already, since it did not previously exist
+        if self.house_dict[household]["isolated"] is True:
+            days_isolated = int(self.time - self.house_dict[household]["isolated_time"])
+            for _ in range(days_isolated):
+                self.decide_if_leave_isolation(node_count)
+
     def new_household(self, new_household_number, generation, infected_by, infected_by_node):
         """Adds a new household to the household dictionary
         
@@ -766,16 +773,12 @@ class household_sim_contact_tracing:
         Only makes sense to apply this function to isolated nodes, in a household with propensity to
         leave isolation
         """
-        household = self.G.nodes[node]["household"]
 
-        days_isolated = self.time - self.house_dict[household]["isolated_time"]
-
-        # TODO make this a proper distribution
+        # TODO make this a proper distribution conditioned on time
         current_prob_leave_isolation = 0.1
 
         if npr.binomial(1, current_prob_leave_isolation) == 1:
             self.G.nodes[node].update({"isolated": False})
-
 
 
     def propagate_contact_tracing(self, household_number):
@@ -829,6 +832,21 @@ class household_sim_contact_tracing:
                         for index_1_hh in self.house_dict[household]["contact_traced_households"]:
                             if self.house_dict[index_1_hh]["contact_tracing_index"] == 2:
                                 self.house_dict[index_1_hh].update({"contact_tracing_index": 1})
+
+    def update_adherence_to_isolation(self):
+        """Loops over nodes currently in quarantine, and updates whether they are currently adhering to quarantine.
+        """
+        [
+            self.decide_if_leave_isolation(node)
+            for node in self.G.nodes()
+            if (
+                # Nodes must be isolated
+                self.G.nodes[node]["isolated"] is True and
+                # The node's household must have the propensity to leave isolation
+                self.house_dict[self.G.nodes[node]["household"]]["propensity_to_leave_isolation"] is True
+            )
+        ]
+        
 
     def simulate_one_day(self):
         """Simulates one day of the epidemic and contact tracing.

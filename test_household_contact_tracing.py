@@ -441,3 +441,46 @@ def test_leave_isolation():
         model.time += 1
 
     assert model.G.nodes[1]["isolated"] == False
+
+def test_update_adherence_to_isolation():
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.803782,
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    model.run_simulation(20)
+
+    initially_isolated = [
+        node 
+        for node in model.G.nodes()
+        if (
+            model.G.nodes[node]["isolated"] is True and
+            model.G.nodes[node]["recovered"] is False and
+            model.house_dict[model.G.nodes[node]["household"]]["propensity_to_leave_isolation"]
+        )
+    ]
+
+    model.update_adherence_to_isolation()
+
+    secondary_isolated = [
+        node 
+        for node in model.G.nodes()
+        if (
+            model.G.nodes[node]["isolated"] is True and
+            model.G.nodes[node]["recovered"] is False and
+            model.house_dict[model.G.nodes[node]["household"]]["propensity_to_leave_isolation"]
+    )]
+
+    assert initially_isolated != secondary_isolated
