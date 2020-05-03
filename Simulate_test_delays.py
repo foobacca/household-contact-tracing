@@ -7,7 +7,7 @@ import itertools
 # npr.seed(1)
 
 repeats = 10000
-days_to_simulate = 90
+days_to_simulate = 50
 
 param_names = [
     "R_0",
@@ -61,7 +61,8 @@ def run_simulation(repeat):
                                                      do_2_step=do_2_step,
                                                      test_before_propagate_tracing=True,
                                                      test_delay_mean=test_delay_mean,
-                                                     prob_has_trace_app=prob_has_trace_app)
+                                                     prob_has_trace_app=prob_has_trace_app,
+                                                     tarting_infections=20)
 
     simulation.run_simulation(days_to_simulate)
 
