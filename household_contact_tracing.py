@@ -53,7 +53,7 @@ def unconditional_hazard_rate(t, survive_forever):
 
     Notes on the conditional variable stuff https://data.princeton.edu/wws509/notes/c7s1
 
-    Returns:
+    Returns
     The probability that a contact made on day t causes an infection.
 
     Notes:
@@ -144,12 +144,13 @@ class household_sim_contact_tracing:
                  contact_trace,
                  household_haz_rate_scale=None,
                  do_2_step=False,
-                 reduce_contacts_by=1,
+                 reduce_contacts_by=0,
                  prob_has_trace_app=0,
                  test_delay_mean=1.52,
                  test_before_propagate_tracing=True,
                  starting_infections=1,
-                 hh_prob_propensity_to_leave_isolation=0):
+                 hh_prob_propensity_to_leave_isolation=0,
+                 leave_isolation_prob=0):
         """Initializes parameters and distributions for performing a simulation of contact tracing.
         The epidemic is modelled as a branching process, with nodes assigned to households.
 
@@ -202,10 +203,15 @@ class household_sim_contact_tracing:
         self.test_delay_mean = test_delay_mean
         self.starting_infections = starting_infections
         self.hh_prob_propensity_to_leave_isolation = hh_prob_propensity_to_leave_isolation
+        self.leave_isolation_prob = leave_isolation_prob
         if do_2_step:
             self.max_tracing_index = 2
         else:
             self.max_tracing_index = 1
+        if type(self.reduce_contacts_by) is tuple:
+            self.contact_rate_reduction_by_household = True
+        else:
+            self.contact_rate_reduction_by_household = False
 
         # Calls the simulation reset function, which creates all the required dictionaries
         self.reset_simulation()
@@ -329,6 +335,7 @@ class household_sim_contact_tracing:
             for _ in range(days_isolated):
                 self.decide_if_leave_isolation(node_count)
 
+
     def new_household(self, new_household_number, generation, infected_by, infected_by_node):
         """Adds a new household to the household dictionary
         
@@ -388,6 +395,17 @@ class household_sim_contact_tracing:
                 self.G.nodes[node]["recovered"] is False)
         ]
 
+    def get_contact_rate_reduction(self, house_size):
+        """For a house size input, returns a contact rate reduction
+
+        Arguments:
+            house_size {int} -- The household size
+        """
+        if self.contact_rate_reduction_by_household is True:
+            return self.reduce_contacts_by[house_size - 1]
+        else:
+            return self.reduce_contacts_by
+
     def increment_infection(self):
         """
         Creates a new days worth of infections
@@ -412,7 +430,10 @@ class household_sim_contact_tracing:
             # Work out how many contacts were with other households
             # If social distancing is in play, global contacts are reduced by
             if self.G.nodes[node]["isolated"] is False:
-                outside_household_contacts = round((1-self.reduce_contacts_by)*(contacts_made - within_household_contacts))
+                outside_household_contacts = round(
+                        (1 - self.get_contact_rate_reduction(house_size = household_size)) * 
+                        (contacts_made - within_household_contacts)
+                    )
             else:
                 outside_household_contacts = 0
 
@@ -506,18 +527,7 @@ class household_sim_contact_tracing:
         self.G.add_edge(infecting_node, node_count)
         self.G.edges[infecting_node, node_count].update({"colour": "black"})
 
-    def increment_contact_tracing(self):
-        """
-        Performs a days worth of contact tracing by:
-        * Looking for nodes that have been admitted to hospital. Once a node is admitted to hospital, it's house is isolated
-        * Looks for houses where the contact tracing delay is over and moves them to the contact traced state
-        * Looks for houses in the contact traced state, and checks them for symptoms. If any of them have symptoms, the house is isolated
-
-        The isolation function also assigns contact tracing times to any houses that had contact with that household
-
-        For each node that is contact traced
-        """
-
+    def update_isolation(self):
         # Update the contact traced status for all households that have had the contact tracing process get there
         [
             self.contact_trace_household(house)
@@ -534,6 +544,18 @@ class household_sim_contact_tracing:
             if (self.G.nodes()[node]["reporting_time"] <= self.time and
                 self.G.nodes()[node]["isolated"] is False)
         ]
+
+    def increment_contact_tracing(self):
+        """
+        Performs a days worth of contact tracing by:
+        * Looking for nodes that have been admitted to hospital. Once a node is admitted to hospital, it's house is isolated
+        * Looks for houses where the contact tracing delay is over and moves them to the contact traced state
+        * Looks for houses in the contact traced state, and checks them for symptoms. If any of them have symptoms, the house is isolated
+
+        The isolation function also assigns contact tracing times to any houses that had contact with that household
+
+        For each node that is contact traced
+        """
 
         # Isolate all households under observation that now display symptoms
         # TODO can this be removed?
@@ -793,8 +815,7 @@ class household_sim_contact_tracing:
         Only makes sense to apply this function to isolated nodes, in a household with propensity to
         leave isolation
         """
-        prob_leave_isolation = 0.1
-        if npr.binomial(1, prob_leave_isolation) == 1:
+        if npr.binomial(1, self.leave_isolation_prob) == 1:
             self.G.nodes[node].update({"isolated": False})
 
 
@@ -889,6 +910,7 @@ class household_sim_contact_tracing:
         Useful for bug testing and visualisation.
         """
         self.increment_infection()
+        self.update_isolation
         if self.contact_trace is True:
             for _ in range(5):
                 self.increment_contact_tracing()
@@ -1243,6 +1265,7 @@ class model_calibration(household_sim_contact_tracing):
         output = s.optimize.root_scalar(g, x0=1, x1=4)
         return output.root
 
+
     def estimate_secondary_attack_rate(self):
         """Simulates a household epidemic, with a single starting case. Outside household infections are performed but will not propagate.
         """
@@ -1315,3 +1338,4 @@ class model_calibration(household_sim_contact_tracing):
             for node in self.G.nodes()
             if self.G.nodes[node]["household"] in starting_households
         ]
+
