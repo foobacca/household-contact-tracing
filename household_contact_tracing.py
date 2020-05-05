@@ -899,8 +899,8 @@ class household_sim_contact_tracing:
             self.G.nodes[node].update({"isolated": False})
             for node in self.G.nodes()
             if (
-                self.time >= self.G.nodes[node]["symptom_onset"] and
-                self.time >= self.house_dict[self.G.nodes[node]["household"]]["isolated_time"] + 14
+                self.time >= self.G.nodes[node]["symptom_onset"] + 14 and
+                self.G.nodes[node]["isolated"] is True
                 )
         ]
 
@@ -910,7 +910,7 @@ class household_sim_contact_tracing:
         Useful for bug testing and visualisation.
         """
         self.increment_infection()
-        self.update_isolation
+        self.update_isolation()
         if self.contact_trace is True:
             for _ in range(5):
                 self.increment_contact_tracing()
