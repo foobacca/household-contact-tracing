@@ -1008,8 +1008,10 @@ class household_sim_contact_tracing:
 
         # Infection Count output
         self.inf_counts = total_cases
+        
 
-    def run_simulation(self, time_out):
+
+    def run_simulation(self, time_out, stop_when_X_infections=False):
 
         # Create all the required dictionaries and reset parameters
         self.reset_simulation()
@@ -1018,13 +1020,15 @@ class household_sim_contact_tracing:
         self.total_cases = []
 
         # Initial values
+        self.end_reason = ''
         self.timed_out = False
         self.extinct = False
+        self.day_extinct = -1
 
         # While loop ends when there are no non-isolated infections
         currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
 
-        while (currently_infecting != 0 and self.timed_out is False):
+        while self.end_reason == '':
 
             # This chunk of code executes a days worth on infections and contact tracings
             node_count = nx.number_of_nodes(self.G)
@@ -1037,13 +1041,22 @@ class household_sim_contact_tracing:
             currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
 
             if currently_infecting == 0:
+                self.end_reason = 'extinct'
                 self.died_out = True
+                self.day_extinct = self.time
 
             if self.time == time_out:
+                self.end_reason = 'timed_out'
+                self.timed_out = True
+                
+            if stop_when_X_infections is True and currently_infecting > 1000:
+                self.end_reason = 'more_than_X'
                 self.timed_out = True
 
         # Infection Count output
         self.inf_counts = self.total_cases
+        
+ 
 
     def onset_to_isolation_times(self, include_self_reports = True):
         if include_self_reports:
