@@ -88,7 +88,6 @@ def current_prob_leave_isolation(t, survive_forever):
     return si.quad(lambda t: unconditional_hazard_rate(t, survive_forever), t, t+1)[0]
 
 
-
 def negbin_pdf(x, m, a):
     """
     We need to draw values from an overdispersed negative binomial distribution, with non-integer inputs. Had to
@@ -114,9 +113,216 @@ def compute_negbin_cdf(mean, overdispersion, length_out):
     return cdf
 
 
+class Node:
+
+    def __init__(
+        self, nodes, houses, node_id,
+        time_infected, generation, household, isolated,
+        symptom_onset_time, serial_interval, recovery_time, will_report,
+        time_of_reporting, has_contact_tracing_app,
+        contact_traced=False, had_contacts_traced=False,
+        outside_house_contacts_made=0, spread_to=None, recovered=False
+    ):
+        self.nodes = nodes
+        self.houses = houses
+        self.node_id = node_id
+        self.time_infected = time_infected
+        self.generation = generation
+        self.household_id = household
+        self.isolated = isolated
+        self.symptom_onset_time = symptom_onset_time
+        self.serial_interval = serial_interval
+        self.recovery_time = recovery_time
+        self.will_report = will_report
+        self.time_of_reporting = time_of_reporting
+        self.has_contact_tracing_app = has_contact_tracing_app
+        self.contact_traced = contact_traced
+        self.had_contacts_traced = had_contacts_traced
+        self.outside_house_contacts_made = outside_house_contacts_made
+        self.spread_to = spread_to if spread_to else []
+        self.recovered = recovered
+
+    @property
+    def household(self):
+        return self.houses.household(self.household_id)
+
+    def as_dict(self):
+        return {
+            "time_infected": self.time_infected,
+            "generation": self.generation,
+            "household": self.household_id,
+            "contact_traced": self.contact_traced,
+            "isolated": self.isolated,
+            "symptom_onset": self.symptom_onset_time,
+            "outside_house_contacts_made": self.outside_house_contacts_made,
+            "had_contacts_traced": self.had_contacts_traced,
+            "spread_to": self.spread_to,
+            "serial_interval": self.serial_interval,
+            "recovered": self.recovered,
+            "recovery_time": self.recovery_time,
+            "will_report_infection": self.will_report,
+            "reporting_time": self.time_of_reporting,
+            "has_trace_app": self.has_contact_tracing_app,
+        }
+
+    @classmethod
+    def from_dict(cls, nodes, houses, node_id, node_dict):
+        return cls(nodes, houses, node_id, **node_dict)
+
+
+class NodeCollection:
+
+    def __init__(self, G: nx.Graph, houses: 'HouseholdCollection'):
+        """
+        G is a networkx Graph() object
+        """
+        self.G = G
+        self.houses = houses
+
+    def add_node(
+        self, node_id, time, generation, household, isolated,
+        symptom_onset_time, serial_interval, recovery_time, will_report,
+        time_of_reporting, has_contact_tracing_app
+    ):
+        self.G.add_node(node_id)
+        node = Node(
+            self, self.houses, node_id,
+            time, generation, household, isolated,
+            symptom_onset_time, serial_interval, recovery_time, will_report,
+            time_of_reporting, has_contact_tracing_app,
+        )
+        self.G.nodes[node_id].update(node.as_dict())
+
+    def node(self, node_id):
+        return Node.from_dict(
+            self, self.houses, node_id, self.G.nodes[node_id]
+        )
+
+    def all_nodes(self):
+        return [self.node(n) for n in self.G]
+
+    def nodes_in_latest_gen(self, time):
+        return [
+            node for node in self.all_nodes()
+            if not node.isolated
+            and not node.recovered
+            and node.reporting_time >= time
+        ]
+
+    def currently_infecting(self):
+        return [
+            node for node in self.all_nodes()
+            if not node.isolated
+            and not node.recovered
+        ]
+
+    def newly_reported(self, time):
+        # The following chunk of code is to record counts of how many contacts
+        # must be traced, used for evaluating when capacity is reached.
+        # Get all the cases that have reported their infection today
+        return [
+            node for node in self.all_nodes()
+            if not node.had_contacts_traced
+            and node.reporting_time == time
+        ]
+
+    def symptomatic_in_household(self, time, household_number):
+        return [
+            node for node in self.all_nodes()
+            if node.symptom_onset <= time
+            and node.household_id == household_number
+        ]
+
+    def new_symptomatic(self, time):
+        # For nodes who have just onset symptoms, but their household has been
+        # contact traced, now trace their contacts
+        return [
+            node for node in self.all_nodes()
+            if not node.had_contacts_traced
+            and node.symptom_onset == time
+            and node.contact_traced
+        ]
+
+    def reporting_and_non_isolated_households(self, time):
+        unique_household_ids = set([
+            node.household_id for node in self.all_nodes()
+            if node.reporting_time == time
+            and not node.isolated
+        ])
+        return [self.houses.household(hid) for hid in unique_household_ids]
+
+    def perform_recoveries(self, time):
+        """
+        Loops over all nodes in the branching process and determines recoveries.
+
+        time - The current time of the process, if a nodes recovery time equals the current time, then it is set to the recovered state
+        """
+        [
+            self.G.nodes[node].update({"recovered": True}) for node in self.G.nodes
+            if self.G.nodes[node]["recovery_time"] == time
+        ]
+
+
+class Household:
+
+    def __init__(
+        self, houses, nodes, house_id,
+        house_size, time_infected, propensity, generation, infected_by,
+        infected_by_node
+    ):
+        self.houses = houses
+        self.nodes = nodes
+        self.house_id = house_id
+        self.size = house_size                  # Size of the household
+        self.time = time_infected               # The time at which the infection entered the household
+        self.susceptibles = house_size - 1      # How many susceptibles remain in the household
+        self.isolated = False                   # Has the household been isolated, so there can be no more infections from this household
+        self.isolated_time = float('inf')       # When the house was isolated
+        self.propensity_to_leave_isolation = propensity
+        self.contact_traced = False             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
+        self.time_until_contact_traced = float('inf')  # The time until quarantine, calculated from contact tracing processes on connected households
+        self.contact_traced_households = []     # The list of households contact traced from this one
+        self.being_contact_traced_from = None   # If the house if being contact traced, this is the house_id of the first house that will get there
+        self.propagated_contact_tracing = False  # The house has not yet propagated contact tracing
+        self.time_propagated_tracing = None     # Time household propagated contact tracing
+        self.contact_tracing_index = 0          # The house is which step of the contact tracing process
+        self.generation = generation            # Which generation of households it belongs to
+        self.infected_by = infected_by          # Which house infected the household
+        self.spread_to = []                     # Which households were infected by this household
+        self.nodes = []                         # The ID of currently infected nodes in the household
+        self.infected_by_node = infected_by_node  # Which node infected the household
+        self.within_house_edges = []            # Which edges are contained within the household
+        self.had_contacts_traced = False         # Have the nodes inside the household had their contacts traced?
+
+    @property
+    def nodes(self):
+        return [self.nodes.node(n) for n in self.nodes]
+
+
+class HouseholdCollection:
+
+    def __init__(self, house_dict, nodes):
+        self.house_dict = house_dict
+        self.nodes = nodes
+
+    def add_household(
+        self, house_id,
+        house_size, time_infected, propensity, generation, infected_by,
+        infected_by_node
+    ):
+        new_household = Household(
+            self, self.nodes, house_id,
+            house_size, time_infected, propensity, generation, infected_by,
+            infected_by_node
+        )
+        self.house_dict[house_id] = new_household
+        return new_household
+
+    def household(self, house_id):
+        return self.house_dict[house_id]
+
+
 # Precomputing the cdf's for generating the overdispersed contact data, saves a lot of time later
-
-
 class household_sim_contact_tracing:
     # We assign each node a recovery period of 14 days, after 14 days the probability of causing a new infections is 0,
     # due to the generation time distribution
@@ -334,7 +540,6 @@ class household_sim_contact_tracing:
             days_isolated = int(self.time - self.house_dict[household]["isolated_time"])
             for _ in range(days_isolated):
                 self.decide_if_leave_isolation(node_count)
-
 
     def new_household(self, new_household_number, generation, infected_by, infected_by_node):
         """Adds a new household to the household dictionary
@@ -1008,7 +1213,7 @@ class household_sim_contact_tracing:
 
         # Infection Count output
         self.inf_counts = total_cases
-        
+
 
 
     def run_simulation(self, time_out, stop_when_X_infections=False):
@@ -1048,15 +1253,15 @@ class household_sim_contact_tracing:
             if self.time == time_out:
                 self.end_reason = 'timed_out'
                 self.timed_out = True
-                
+
             if stop_when_X_infections is True and currently_infecting > 1000:
                 self.end_reason = 'more_than_X'
                 self.timed_out = True
 
         # Infection Count output
         self.inf_counts = self.total_cases
-        
- 
+
+
 
     def onset_to_isolation_times(self, include_self_reports = True):
         if include_self_reports:
