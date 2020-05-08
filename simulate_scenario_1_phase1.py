@@ -11,7 +11,7 @@ starting_infections = 5000
 
 def run_simulation(repeat):
 
-    haz_rate_scale = 0.806271
+    haz_rate_scale = 0.812030
 
     infection_reporting_prob = 0.8
 
@@ -19,7 +19,7 @@ def run_simulation(repeat):
 
     contact_trace_delay_par = npr.uniform(1.5, 2.5)
 
-    reduce_contacts_by = npr.uniform(0.0, 0.8)
+    reduce_contacts_by = "scenario1_phase1"
 
     do_2_step = npr.choice([True, False])
 
@@ -31,7 +31,7 @@ def run_simulation(repeat):
                                                      overdispersion=0.36,
                                                      infection_reporting_prob=infection_reporting_prob,
                                                      contact_trace=True,
-                                                     reduce_contacts_by=reduce_contacts_by,
+                                                     reduce_contacts_by=(0.8286, 0.8425, 0.8739, 0.8996, 0.8998, 0.9037),
                                                      do_2_step=do_2_step,
                                                      test_before_propagate_tracing=False,
                                                      prob_has_trace_app=prob_has_trace_app,
@@ -70,4 +70,4 @@ if __name__ == '__main__':
         results = p.map(run_simulation, range(repeats))
         results = pd.DataFrame(results)
         results = results.rename(columns=col_names_dict)
-        results.to_excel("Data/simulation_results_no_test_delays.xlsx")
+        results.to_excel("Data/simulation_results_S1p1_08.xlsx")

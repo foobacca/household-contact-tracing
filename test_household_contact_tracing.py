@@ -430,7 +430,8 @@ def test_leave_isolation():
         infection_reporting_prob=0.8,
         contact_trace=True,
         test_before_propagate_tracing=False,
-        hh_prob_propensity_to_leave_isolation=1)
+        hh_prob_propensity_to_leave_isolation=1,
+        leave_isolation_prob=1)
 
     # set node 1 to the isolation status
     model.G.nodes[1]["isolated"] = True
@@ -457,7 +458,8 @@ def test_update_adherence_to_isolation():
         test_before_propagate_tracing=False,
         prob_has_trace_app=0.0,
         starting_infections=10,
-        hh_prob_propensity_to_leave_isolation=1
+        hh_prob_propensity_to_leave_isolation=1,
+        leave_isolation_prob=0.1
     )
 
     model.run_simulation(20)
