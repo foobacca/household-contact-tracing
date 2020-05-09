@@ -309,7 +309,7 @@ class Household:
         self.contact_traced = False             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
         self.time_until_contact_traced = float('inf')  # The time until quarantine, calculated from contact tracing processes on connected households
         self.contact_traced_household_ids: List[int] = []  # The list of households contact traced from this one
-        self.being_contact_traced_from = None   # If the house if being contact traced, this is the house_id of the first house that will get there
+        self.being_contact_traced_from: Optional[int] = None   # If the house if being contact traced, this is the house_id of the first house that will get there
         self.propagated_contact_tracing = False  # The house has not yet propagated contact tracing
         self.time_propagated_tracing = None     # Time household propagated contact tracing
         self.contact_tracing_index = 0          # The house is which step of the contact tracing process
