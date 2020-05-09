@@ -1,3 +1,5 @@
+from typing import Dict, Iterator, List, Optional, Tuple
+
 import numpy as np
 import numpy.random as npr
 import matplotlib.pyplot as plt
@@ -116,7 +118,10 @@ def compute_negbin_cdf(mean, overdispersion, length_out):
 class Node:
 
     def __init__(
-        self, nodes, houses, node_id,
+        self,
+        nodes: 'NodeCollection',
+        houses: 'HouseholdCollection',
+        node_id: int,
         time_infected, generation, household, isolated,
         symptom_onset_time, serial_interval, recovery_time, will_report,
         time_of_reporting, has_contact_tracing_app,
@@ -143,10 +148,10 @@ class Node:
         self.recovered = recovered
 
     @property
-    def household(self):
+    def household(self) -> 'Household':
         return self.houses.household(self.household_id)
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
         return {
             "time_infected": self.time_infected,
             "generation": self.generation,
@@ -166,7 +171,7 @@ class Node:
         }
 
     @classmethod
-    def from_dict(cls, nodes, houses, node_id, node_dict):
+    def from_dict(cls, nodes, houses, node_id, node_dict) -> 'Node':
         return cls(nodes, houses, node_id, **node_dict)
 
 
@@ -183,7 +188,7 @@ class NodeCollection:
         self, node_id, time, generation, household, isolated,
         symptom_onset_time, serial_interval, recovery_time, will_report,
         time_of_reporting, has_contact_tracing_app
-    ):
+    ) -> Node:
         self.G.add_node(node_id)
         node = Node(
             self, self.houses, node_id,
@@ -192,64 +197,65 @@ class NodeCollection:
             time_of_reporting, has_contact_tracing_app,
         )
         self.G.nodes[node_id].update(node.as_dict())
+        return node
 
-    def node(self, node_id):
+    def node(self, node_id) -> Node:
         return Node.from_dict(
             self, self.houses, node_id, self.G.nodes[node_id]
         )
 
-    def all_nodes(self):
-        return [self.node(n) for n in self.G]
+    def all_nodes(self) -> Iterator[Node]:
+        return (self.node(n) for n in self.G)
 
-    def nodes_in_latest_gen(self, time):
-        return [
+    def nodes_in_latest_gen(self, time) -> Iterator[Node]:
+        return (
             node for node in self.all_nodes()
             if not node.isolated
             and not node.recovered
-            and node.reporting_time >= time
-        ]
+            and node.time_of_reporting >= time
+        )
 
-    def currently_infecting(self):
-        return [
+    def currently_infecting(self) -> Iterator[Node]:
+        return (
             node for node in self.all_nodes()
             if not node.isolated
             and not node.recovered
-        ]
+        )
 
-    def newly_reported(self, time):
+    def newly_reported(self, time) -> Iterator[Node]:
         # The following chunk of code is to record counts of how many contacts
         # must be traced, used for evaluating when capacity is reached.
         # Get all the cases that have reported their infection today
-        return [
+        return (
             node for node in self.all_nodes()
             if not node.had_contacts_traced
-            and node.reporting_time == time
-        ]
+            and node.time_of_reporting == time
+        )
 
-    def symptomatic_in_household(self, time, household_number):
-        return [
+    def symptomatic_in_household(self, time, household_number) -> Iterator[Node]:
+        return (
             node for node in self.all_nodes()
-            if node.symptom_onset <= time
+            if node.symptom_onset_time <= time
             and node.household_id == household_number
-        ]
+        )
 
-    def new_symptomatic(self, time):
+    def new_symptomatic(self, time) -> Iterator[Node]:
         # For nodes who have just onset symptoms, but their household has been
         # contact traced, now trace their contacts
-        return [
+        return (
             node for node in self.all_nodes()
             if not node.had_contacts_traced
-            and node.symptom_onset == time
+            and node.symptom_onset_time == time
             and node.contact_traced
-        ]
+        )
 
-    def reporting_and_non_isolated_households(self, time):
-        unique_household_ids = set([
+    def reporting_and_non_isolated_households(self, time) -> Iterator['Household']:
+        unique_household_ids = set((
             node.household_id for node in self.all_nodes()
-            if node.reporting_time == time
+            if node.time_of_reporting == time
             and not node.isolated
-        ])
-        return [self.houses.household(hid) for hid in unique_household_ids]
+        ))
+        return (self.houses.household(hid) for hid in unique_household_ids)
 
     def perform_recoveries(self, time):
         """
@@ -266,12 +272,19 @@ class NodeCollection:
 class Household:
 
     def __init__(
-        self, houses, nodes, house_id,
-        house_size, time_infected, propensity, generation, infected_by,
-        infected_by_node
+        self,
+        houses: 'HouseholdCollection',
+        nodecollection: NodeCollection,
+        house_id: int,
+        house_size: int,
+        time_infected: int,
+        propensity,
+        generation: int,
+        infected_by: int,
+        infected_by_node: int
     ):
         self.houses = houses
-        self.nodes = nodes
+        self.nodecollection = nodecollection
         self.house_id = house_id
         self.size = house_size                  # Size of the household
         self.time = time_infected               # The time at which the infection entered the household
@@ -281,35 +294,38 @@ class Household:
         self.propensity_to_leave_isolation = propensity
         self.contact_traced = False             # If the house has been contact traced, it is isolated as soon as anyone in the house shows symptoms
         self.time_until_contact_traced = float('inf')  # The time until quarantine, calculated from contact tracing processes on connected households
-        self.contact_traced_households = []     # The list of households contact traced from this one
+        self.contact_traced_households: List[int] = []  # The list of households contact traced from this one
         self.being_contact_traced_from = None   # If the house if being contact traced, this is the house_id of the first house that will get there
         self.propagated_contact_tracing = False  # The house has not yet propagated contact tracing
         self.time_propagated_tracing = None     # Time household propagated contact tracing
         self.contact_tracing_index = 0          # The house is which step of the contact tracing process
         self.generation = generation            # Which generation of households it belongs to
         self.infected_by = infected_by          # Which house infected the household
-        self.spread_to = []                     # Which households were infected by this household
-        self.nodes = []                         # The ID of currently infected nodes in the household
+        self.spread_to: List[int] = []          # Which households were infected by this household
+        self.node_ids: List[int] = []           # The ID of currently infected nodes in the household
         self.infected_by_node = infected_by_node  # Which node infected the household
-        self.within_house_edges = []            # Which edges are contained within the household
+        self.within_house_edges: List[Tuple[int, int]] = []  # Which edges are contained within the household
         self.had_contacts_traced = False         # Have the nodes inside the household had their contacts traced?
 
     @property
-    def nodes(self):
-        return [self.nodes.node(n) for n in self.nodes]
+    def nodes(self) -> Iterator[Node]:
+        return (self.nodecollection.node(n) for n in self.node_ids)
+
+    def add_node_id(self, node_id: int):
+        self.node_ids.append(node_id)
 
 
 class HouseholdCollection:
 
-    def __init__(self, house_dict, nodes):
-        self.house_dict = house_dict
+    def __init__(self, nodes: NodeCollection):
+        self.house_dict: Dict[int, Household] = {}
         self.nodes = nodes
 
     def add_household(
         self, house_id,
         house_size, time_infected, propensity, generation, infected_by,
         infected_by_node
-    ):
+    ) -> Household:
         new_household = Household(
             self, self.nodes, house_id,
             house_size, time_infected, propensity, generation, infected_by,
@@ -318,8 +334,11 @@ class HouseholdCollection:
         self.house_dict[house_id] = new_household
         return new_household
 
-    def household(self, house_id):
+    def household(self, house_id) -> Household:
         return self.house_dict[house_id]
+
+    def all_households(self) -> Iterator[Household]:
+        return (self.household(hid) for hid in self.house_dict)
 
 
 # Precomputing the cdf's for generating the overdispersed contact data, saves a lot of time later
