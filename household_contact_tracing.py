@@ -311,7 +311,7 @@ class Household:
         self.contact_traced_household_ids: List[int] = []  # The list of households contact traced from this one
         self.being_contact_traced_from: Optional[int] = None   # If the house if being contact traced, this is the house_id of the first house that will get there
         self.propagated_contact_tracing = False  # The house has not yet propagated contact tracing
-        self.time_propagated_tracing = None     # Time household propagated contact tracing
+        self.time_propagated_tracing: Optional[int] = None     # Time household propagated contact tracing
         self.contact_tracing_index = 0          # The house is which step of the contact tracing process
         self.generation = generation            # Which generation of households it belongs to
         self.infected_by_id = infected_by       # Which house infected the household
