@@ -122,11 +122,22 @@ class Node:
         nodes: 'NodeCollection',
         houses: 'HouseholdCollection',
         node_id: int,
-        time_infected, generation, household, isolated,
-        symptom_onset_time, serial_interval, recovery_time, will_report,
-        time_of_reporting, has_contact_tracing_app,
-        contact_traced=False, had_contacts_traced=False,
-        outside_house_contacts_made=0, spread_to=None, recovered=False
+        time_infected: int,
+        generation: int,
+        household: int,
+        isolated: bool,
+        symptom_onset_time: int,
+        serial_interval: int,
+        recovery_time: int,
+        will_report_infection: bool,
+        time_of_reporting: int,
+        has_contact_tracing_app: bool,
+        testing_delay: int,
+        contact_traced=False,
+        had_contacts_traced=False,
+        outside_house_contacts_made=0,
+        spread_to: Optional[List[int]] = None,
+        recovered=False
     ):
         self.nodes = nodes
         self.houses = houses
@@ -138,9 +149,10 @@ class Node:
         self.symptom_onset_time = symptom_onset_time
         self.serial_interval = serial_interval
         self.recovery_time = recovery_time
-        self.will_report = will_report
+        self.will_report_infection = will_report_infection
         self.time_of_reporting = time_of_reporting
         self.has_contact_tracing_app = has_contact_tracing_app
+        self.testing_delay = testing_delay
         self.contact_traced = contact_traced
         self.had_contacts_traced = had_contacts_traced
         self.outside_house_contacts_made = outside_house_contacts_made
@@ -157,16 +169,17 @@ class Node:
             "household": self.household_id,
             "contact_traced": self.contact_traced,
             "isolated": self.isolated,
-            "symptom_onset": self.symptom_onset_time,
+            "symptom_onset_time": self.symptom_onset_time,
             "outside_house_contacts_made": self.outside_house_contacts_made,
             "had_contacts_traced": self.had_contacts_traced,
             "spread_to": self.spread_to,
             "serial_interval": self.serial_interval,
             "recovered": self.recovered,
             "recovery_time": self.recovery_time,
-            "will_report_infection": self.will_report,
-            "reporting_time": self.time_of_reporting,
-            "has_trace_app": self.has_contact_tracing_app,
+            "will_report_infection": self.will_report_infection,
+            "time_of_reporting": self.time_of_reporting,
+            "has_contact_tracing_app": self.has_contact_tracing_app,
+            "testing_delay": self.testing_delay,
         }
 
     @classmethod
@@ -186,24 +199,27 @@ class Node:
         """
         self.nodes.update_node(self, **kwargs)
 
+    # TODO: __setattr__ thing to save back to self.G
+
 
 class NodeCollection:
 
     def __init__(self, houses: 'HouseholdCollection'):
         self.G = nx.Graph()
         self.houses = houses
+        # TODO: put node_count in this class
 
     def add_node(
         self, node_id, time, generation, household, isolated,
-        symptom_onset_time, serial_interval, recovery_time, will_report,
-        time_of_reporting, has_contact_tracing_app
+        symptom_onset_time, serial_interval, recovery_time, will_report_infection,
+        time_of_reporting, has_contact_tracing_app, testing_delay
     ) -> Node:
         self.G.add_node(node_id)
         node = Node(
             self, self.houses, node_id,
             time, generation, household, isolated,
-            symptom_onset_time, serial_interval, recovery_time, will_report,
-            time_of_reporting, has_contact_tracing_app,
+            symptom_onset_time, serial_interval, recovery_time, will_report_infection,
+            time_of_reporting, has_contact_tracing_app, testing_delay
         )
         self.G.nodes[node_id].update(node.as_dict())
         return node
@@ -321,7 +337,6 @@ class Household:
         self.within_house_edges: List[Tuple[int, int]] = []  # Which edges are contained within the household
         self.had_contacts_traced = False         # Have the nodes inside the household had their contacts traced?
 
-    @property
     def nodes(self) -> Iterator[Node]:
         return (self.nodecollection.node(n) for n in self.node_ids)
 
@@ -345,6 +360,7 @@ class HouseholdCollection:
     def __init__(self, nodes: NodeCollection):
         self.house_dict: Dict[int, Household] = {}
         self.nodes = nodes
+        # TODO: put house_count in this class
 
     def add_household(
         self,
@@ -535,7 +551,7 @@ class household_sim_contact_tracing:
         """
         return len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"]])
 
-    def new_infection(self, node_count, generation, household, serial_interval=None):
+    def new_infection(self, node_count: int, generation: int, household_id: int, serial_interval=None):
         """
         Adds a new infection to the graph along with the following attributes:
         t - when they were infected
@@ -550,51 +566,45 @@ class household_sim_contact_tracing:
         symptom_onset_time = self.time + self.incubation_period()
         # When a node reports it's infection
         if npr.binomial(1, self.infection_reporting_prob) == 1:
-            will_report = True
+            will_report_infection = True
             time_of_reporting = symptom_onset_time + self.reporting_delay()
         else:
-            will_report = False
+            will_report_infection = False
             time_of_reporting = float('Inf')
 
         # We assign each node a recovery period of 21 days, after 21 days the probability of causing a new infections is
         # 0, due to the generation time distribution
         recovery_time = self.time + 21
 
-        # Give the node the required attributes
-        self.G.add_node(node_count)
-        new_node_dict = {
-            "time_infected": self.time,
-            "generation": generation,
-            "household": household,
-            "contact_traced": False,
-            "isolated": self.house_dict[household]["isolated"],
-            "symptom_onset": symptom_onset_time,
-            "outside_house_contacts_made": 0,
-            "had_contacts_traced": False,
-            "spread_to": [],
-            "serial_interval": serial_interval,
-            "recovered": False,
-            "recovery_time": recovery_time,
-            "will_report_infection": will_report,
-            "reporting_time": time_of_reporting,
-            "has_trace_app": self.has_contact_tracing_app(),
-            "testing_delay": self.testing_delay()
-        }
+        household = self.houses.household(household_id)
 
-        self.G.nodes[node_count].update(new_node_dict)
+        self.nodes.add_node(
+            node_id=node_count,
+            time=self.time,
+            generation=generation,
+            household=household_id,
+            isolated=household.isolated,
+            symptom_onset_time=symptom_onset_time,
+            serial_interval=serial_interval,
+            recovery_time=recovery_time,
+            will_report_infection=will_report_infection,
+            time_of_reporting=time_of_reporting,
+            has_contact_tracing_app=self.has_contact_tracing_app(),
+            testing_delay=self.testing_delay(),
+        )
 
         # Updates to the household dictionary
         # Each house now stores a the ID's of which nodes are stored inside the house, so that quarantining can be done at the household level
-        self.house_dict[household]['nodes'].append(node_count)
+        household.node_ids.append(node_count)
 
         # A number of days may have passed since the house was isolated
         # We need to decide if the node has left isolation already, since it did not previously exist
-        if self.house_dict[household]["isolated"] is True:
-            days_isolated = int(self.time - self.house_dict[household]["isolated_time"])
+        if household.isolated:
+            days_isolated = int(self.time - household.isolated_time)
             for _ in range(days_isolated):
                 self.decide_if_leave_isolation(node_count)
 
-    def new_household(self, new_household_number, generation, infected_by, infected_by_node):
+    def new_household(self, new_household_number: int, generation: int, infected_by: int, infected_by_node: int):
         """Adds a new household to the household dictionary
 
         Arguments:
@@ -617,24 +627,24 @@ class household_sim_contact_tracing:
             infected_by_node=infected_by_node,
         )
 
-    def get_edge_between_household(self, house_1, house_2):
-        for node_1 in self.house_dict[house_1]["nodes"]:
-            for node_2 in self.house_dict[house_2]["nodes"]:
-                if self.G.has_edge(node_1, node_2):
-                    return (node_1, node_2)
+    def get_edge_between_household(self, house1: Household, house2: Household):
+        for node1 in house1.nodes():
+            for node2 in house2.nodes():
+                if self.G.has_edge(node1.node_id, node2.node_id):
+                    return (node1.node_id, node2.node_id)
 
     def is_edge_app_traced(self, edge):
         """Returns whether both ends of an edge have the app, and the app does the tracing.
         """
-        node_1_app = self.G.nodes[edge[0]]["has_trace_app"]
-        node_2_app = self.G.nodes[edge[1]]["has_trace_app"]
+        node_1_app = self.G.nodes[edge[0]]["has_contact_tracing_app"]
+        node_2_app = self.G.nodes[edge[1]]["has_contact_tracing_app"]
         return (node_2_app and node_1_app)
 
     @property
     def active_infections(self):
         return [
             node for node in self.G.nodes()
-            if (self.G.nodes[node]["reporting_time"] >= self.time and
+            if (self.G.nodes[node]["time_of_reporting"] >= self.time and
                 self.G.nodes[node]["recovered"] is False)
         ]
 
@@ -654,31 +664,31 @@ class household_sim_contact_tracing:
         Creates a new days worth of infections
         """
 
-        for node in self.active_infections:
+        for node_id in self.active_infections:
+            node = self.nodes.node(node_id)
+            household = node.household()
 
             # Extracting useful parameters from the node
-            node_household = self.G.nodes()[node]["household"]
-            days_since_infected = self.time - self.G.nodes()[node]["time_infected"]
-            household_size = self.house_dict[node_household]["size"]
+            days_since_infected = self.time - node.time_infected
 
             # The number of contacts made that will could spread the infection, if the other person is susceptible
-            contacts_made = self.contacts_made_today(household_size)
+            contacts_made = self.contacts_made_today(household.size)
 
             # How many of the contacts are within the household
-            within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household_size-1])
+            within_household_contacts = npr.binomial(contacts_made, self.proportion_of_within_house_contacts[household.size-1])
 
             # Each contact is with a unique individual, so it is not possible to have more than h-1 contacts within household
-            within_household_contacts = min(household_size - 1, within_household_contacts)
+            within_household_contacts = min(household.size - 1, within_household_contacts)
 
             # Work out how many contacts were with other households
             # If social distancing is in play, global contacts are reduced by
-            if self.G.nodes[node]["isolated"] is False:
+            if node.isolated:
+                outside_household_contacts = 0
+            else:
                 outside_household_contacts = round(
-                        (1 - self.get_contact_rate_reduction(house_size=household_size)) *
+                        (1 - self.get_contact_rate_reduction(house_size=household.size)) *
                         (contacts_made - within_household_contacts)
                     )
-            else:
-                outside_household_contacts = 0
 
             # Within household, how many of the infections would cause new infections
             # These contacts may be made with someone who is already infected, and so they will again be thinned
@@ -688,87 +698,89 @@ class household_sim_contact_tracing:
                 # A further thinning has to happen since each attempt may choose an already infected person
                 # That is to say, if everyone in your house is infected, you have 0 chance to infect a new person in your house
 
-                # Get the number of susceptibles for their current household
-                susceptibles = self.house_dict[node_household]["susceptibles"]
-
                 # A one represents a susceptibles node in the household
                 # A 0 represents an infected member of the household
                 # We choose a random subset of this vector of length within_household_potential_new_infections to determine infections
-                household_composition = [1]*susceptibles + [0]*(household_size - 1 - susceptibles)
+                household_composition = [1]*household.susceptibles + [0]*(household.size - 1 - household.susceptibles)
                 within_household_new_infections = sum(npr.choice(household_composition, within_household_potential_new_infections, replace=False))
 
                 # If the within household infection is successful:
                 for _ in range(within_household_new_infections):
                     self.new_within_household_infection(
-                        infecting_node=node,
+                        infecting_node_id=node_id,
                         serial_interval=days_since_infected
                     )
 
             # Update how many contacts the node made
-            self.G.nodes()[node]["outside_house_contacts_made"] += outside_household_contacts
+            node.outside_house_contacts_made += outside_household_contacts
+            node.save()
 
             # How many outside household contacts cause new infections
             outside_household_new_infections = npr.binomial(outside_household_contacts, current_prob_infection(days_since_infected, self.haz_rate_scale))
 
             for _ in range(outside_household_new_infections):
                 self.new_outside_household_infection(
-                    infecting_node=node,
+                    infecting_node_id=node_id,
                     serial_interval=days_since_infected)
 
-    def new_within_household_infection(self, infecting_node: int, serial_interval: Optional[int]):
+    def new_within_household_infection(self, infecting_node_id: int, serial_interval: Optional[int]):
         # Add a new node to the network, it will be a member of the same household that the node that infected it was
         node_count = nx.number_of_nodes(self.G) + 1
 
         # We record which node caused this infection
-        self.G.nodes()[infecting_node]["spread_to"].append(node_count)
+        infecting_node = self.nodes.node(infecting_node_id)
+        infecting_node.spread_to.append(node_count)
+        infecting_node.save()
 
-        infecting_node_household = self.G.nodes[infecting_node]["household"]
+        infecting_node_household = infecting_node.household()
 
         # Adds the new infection to the network
         self.new_infection(node_count=node_count,
-                           generation=self.G.nodes()[infecting_node]["generation"] + 1,
-                           household=infecting_node_household,
+                           generation=infecting_node.generation + 1,
+                           household_id=infecting_node_household.house_id,
                            serial_interval=serial_interval)
 
         # Add the edge to the graph and give it the default colour
-        self.G.add_edge(infecting_node, node_count)
-        self.G.edges[infecting_node, node_count].update({"colour": self.default_edge_colour})
+        self.G.add_edge(infecting_node_id, node_count)
+        self.G.edges[infecting_node_id, node_count].update({"colour": self.default_edge_colour})
 
         # Decrease the number of susceptibles in that house by 1
-        self.house_dict[infecting_node_household]['susceptibles'] -= 1
+        infecting_node_household.susceptibles -= 1
 
         # We record which edges are within this household for visualisation later on
-        self.house_dict[infecting_node_household]["within_house_edges"].append((infecting_node, node_count))
+        infecting_node_household.within_house_edges.append((infecting_node_id, node_count))
 
-    def new_outside_household_infection(self, infecting_node: int, serial_interval: Optional[int]):
+    def new_outside_household_infection(self, infecting_node_id: int, serial_interval: Optional[int]):
         # We assume all new outside household infections are in a new household
         # i.e: You do not infect 2 people in a new household
         # you do not spread the infection to a household that already has an infection
         self.house_count += 1
         node_count = nx.number_of_nodes(self.G) + 1
-        infecting_household = self.G.nodes[infecting_node]["household"]
+        infecting_node = self.nodes.node(infecting_node_id)
+        infecting_household = infecting_node.household()
 
         # We record which node caused this infection
-        self.G.nodes()[infecting_node]["spread_to"].append(node_count)
+        infecting_node.spread_to.append(node_count)
+        infecting_node.save()
 
         # We record which house spread to which other house
-        self.house_dict[infecting_household]["spread_to"].append(self.house_count)
+        infecting_household.spread_to_ids.append(self.house_count)
 
         # Create a new household, since the infection was outside the household
         self.new_household(new_household_number=self.house_count,
-                           generation=self.house_dict[infecting_household]["generation"] + 1,
-                           infected_by=self.G.nodes()[infecting_node]["household"],
-                           infected_by_node=infecting_node)
+                           generation=infecting_household.generation + 1,
+                           infected_by=infecting_node.household_id,
+                           infected_by_node=infecting_node_id)
 
         # add a new infection in the house just created
         self.new_infection(node_count=node_count,
-                           generation=self.G.nodes()[infecting_node]["generation"] + 1,
-                           household=self.house_count,
+                           generation=infecting_node.generation + 1,
+                           household_id=self.house_count,
                            serial_interval=serial_interval)
 
         # Add the edge to the graph and give it the default colour
-        self.G.add_edge(infecting_node, node_count)
-        self.G.edges[infecting_node, node_count].update({"colour": "black"})
+        self.G.add_edge(infecting_node_id, node_count)
+        self.G.edges[infecting_node_id, node_count].update({"colour": "black"})
 
     def update_isolation(self):
         # Update the contact traced status for all households that have had the contact tracing process get there
@@ -783,7 +795,7 @@ class household_sim_contact_tracing:
         [
             self.isolate_household(node.household_id)
             for node in self.nodes.all_nodes()
-            if node.reporting_time <= self.time
+            if node.time_of_reporting <= self.time
             and not node.isolated
         ]
 
@@ -816,7 +828,7 @@ class household_sim_contact_tracing:
         [
             self.propagate_contact_tracing(node.household_id)
             for node in self.nodes.all_nodes()
-            if node.reporting_time + node.testing_delay == self.time
+            if node.time_of_reporting + node.testing_delay == self.time
             and not node.household().propagated_contact_tracing
         ]
 
@@ -825,12 +837,12 @@ class household_sim_contact_tracing:
             self.propagate_contact_tracing(node.household_id)
             for node in self.nodes.all_nodes()
             if node.symptom_onset_time <= self.time
-            and not node.household.propagated_contact_tracing
-            and node.household.isolated_time + node.testing_delay <= self.time
+            and not node.household().propagated_contact_tracing
+            and node.household().isolated_time + node.testing_delay <= self.time
         ]
 
         # Update the contact tracing index of households
-        # That is, re-evaluate how far away they are from a known infected case (traced + symptom_onset + testing_delay)
+        # That is, re-evaluate how far away they are from a known infected case (traced + symptom_onset_time + testing_delay)
         self.update_contact_tracing_index()
 
         if self.do_2_step:
@@ -847,12 +859,12 @@ class household_sim_contact_tracing:
         # # Get all the cases that have reported their infection today
         # newly_reported = [node for node in self.G.nodes() if (
         #     self.G.nodes()[node]["had_contacts_traced"] == False
-        #     and self.G.nodes()[node]["reporting_time"] == self.time)
+        #     and self.G.nodes()[node]["time_of_reporting"] == self.time)
         #     ]
 
         # # For nodes who have just onset symptoms, but their household has been contact traced, now trace their contacts
         # new_symptomatic = [node for node in self.G.nodes() if (self.G.nodes()[node]["had_contacts_traced"] == False
-        #                                                         and self.G.nodes()[node]["symptom_onset"] == self.time
+        #                                                         and self.G.nodes()[node]["symptom_onset_time"] == self.time
         #                                                         and self.G.nodes()[node]["contact_traced"] == True)]
 
         # households_to_be_traced = [self.G.nodes[node]["household"] for node in (newly_reported + new_symptomatic)]
@@ -951,16 +963,15 @@ class household_sim_contact_tracing:
         [self.G.nodes()[node].update({"recovered": True}) for node in self.G.nodes() if self.G.nodes[node]["recovery_time"] == self.time]
 
     def colour_node_edges_between_houses(self, house_to: Household, house_from: Household, new_colour):
-
         # Annoying bit of logic to find the edge and colour it
-        for node_1 in house_to.nodes:
-            for node_2 in house_from.nodes:
+        for node_1 in house_to.nodes():
+            for node_2 in house_from.nodes():
                 if self.G.has_edge(node_1.node_id, node_2.node_id):
                     self.G.edges[node_1.node_id, node_2.node_id].update({"colour": new_colour})
 
     def attempt_contact_trace_of_household(self, house_to: Household, house_from: Household, contact_trace_delay: int = 0):
         # Decide if the edge was traced by the app
-        app_traced = self.is_edge_app_traced(self.get_edge_between_household(house_from.house_id, house_to.house_id))
+        app_traced = self.is_edge_app_traced(self.get_edge_between_household(house_from, house_to))
 
         # Get the success probability
         if app_traced:
@@ -1006,7 +1017,7 @@ class household_sim_contact_tracing:
         else:
             self.colour_node_edges_between_houses(house_to, house_from, self.failed_contact_tracing)
 
-    def isolate_household(self, household_number):
+    def isolate_household(self, household_number: int):
         """
         Isolates a house so that all infectives in that household may no longer infect others.
 
@@ -1031,14 +1042,14 @@ class household_sim_contact_tracing:
         # Which house started the contact trace that led to this house being isolated, if there is one
         # A household may be being isolated because someone in the household self reported symptoms
         # Hence sometimes there is a None value for House which contact traced
-        house_which_contact_traced = household.being_contact_traced_from
+        if household.being_contact_traced_from is not None:
+            house_which_contact_traced = self.houses.household(household.being_contact_traced_from)
 
-        # Initially the edge is assigned the contact tracing colour, may be updated if the contact tracing does not succeed
-        if house_which_contact_traced:
-            if self.is_edge_app_traced(self.get_edge_between_household(household_number, house_which_contact_traced)):
-                self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.app_traced_edge)
+            # Initially the edge is assigned the contact tracing colour, may be updated if the contact tracing does not succeed
+            if self.is_edge_app_traced(self.get_edge_between_household(household, house_which_contact_traced)):
+                self.colour_node_edges_between_houses(household, house_which_contact_traced, self.app_traced_edge)
             else:
-                self.colour_node_edges_between_houses(household_number, house_which_contact_traced, self.contact_traced_edge_between_house)
+                self.colour_node_edges_between_houses(household, house_which_contact_traced, self.contact_traced_edge_between_house)
 
         # We update the colour of every edge so that we can tell which household have been contact traced when we visualise
         [
@@ -1107,7 +1118,7 @@ class household_sim_contact_tracing:
             self.decide_if_leave_isolation(node.node_id)
             for node in self.nodes.all_nodes()
             if node.isolated
-            and node.house.propensity_to_leave_isolation
+            and node.household().propensity_to_leave_isolation
         ]
 
     def release_nodes_from_quarantine(self):
@@ -1123,7 +1134,7 @@ class household_sim_contact_tracing:
             node.update(isolated=False)
             for node in self.nodes.all_nodes()
             if self.time >= node.symptom_onset_time + 7
-            and self.time >= node.house.isolated_time + 14
+            and self.time >= node.household().isolated_time + 14
         ]
 
     def simulate_one_day(self):
@@ -1167,7 +1178,6 @@ class household_sim_contact_tracing:
 
         # make things available as before
         self.G = self.nodes.G
-        self.house_dict = self.houses.house_dict
 
         # Create first household
         self.house_count = 0
