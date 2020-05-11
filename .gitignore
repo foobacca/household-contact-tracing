@@ -128,3 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 household_contact_tracing.code-workspace
+.vscode/launch.json
+.vscode/settings.json
