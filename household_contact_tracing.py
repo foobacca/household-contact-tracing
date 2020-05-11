@@ -735,7 +735,7 @@ class household_sim_contact_tracing:
     def update_isolation(self):
         # Update the contact traced status for all households that have had the contact tracing process get there
         [
-            self.contact_trace_household(household.house_id)
+            self.contact_trace_household(household)
             for household in self.houses.all_households()
             if household.time_until_contact_traced <= self.time
             and not household.contact_traced
@@ -743,7 +743,7 @@ class household_sim_contact_tracing:
 
         # Isolate all non isolated households where the infection has been reported
         [
-            self.isolate_household(node.household_id)
+            self.isolate_household(node.household())
             for node in self.nodes.all_nodes()
             if node.time_of_reporting <= self.time
             and not node.isolated
@@ -764,7 +764,7 @@ class household_sim_contact_tracing:
         # Isolate all households under observation that now display symptoms
         # TODO can this be removed?
         [
-            self.isolate_household(node.household_id)
+            self.isolate_household(node.household())
             for node in self.nodes.all_nodes()
             if node.symptom_onset_time <= self.time
             and node.contact_traced
@@ -776,7 +776,7 @@ class household_sim_contact_tracing:
 
         # Propagate the contact tracing for all households that self-reported and have had their test results come back
         [
-            self.propagate_contact_tracing(node.household_id)
+            self.propagate_contact_tracing(node.household())
             for node in self.nodes.all_nodes()
             if node.time_of_reporting + node.testing_delay == self.time
             and not node.household().propagated_contact_tracing
@@ -784,7 +784,7 @@ class household_sim_contact_tracing:
 
         # Propagate the contact tracing for all households that are isolated due to exposure, have developed symptoms and had a test come back
         [
-            self.propagate_contact_tracing(node.household_id)
+            self.propagate_contact_tracing(node.household())
             for node in self.nodes.all_nodes()
             if node.symptom_onset_time <= self.time
             and not node.household().propagated_contact_tracing
@@ -798,7 +798,7 @@ class household_sim_contact_tracing:
         if self.do_2_step:
             # Propagate the contact tracing from any households with a contact tracing index of 1
             [
-                self.propagate_contact_tracing(household.house_id)
+                self.propagate_contact_tracing(household)
                 for household in self.houses.all_households()
                 if household.contact_tracing_index == 1
                 and not household.propagated_contact_tracing
@@ -877,14 +877,12 @@ class household_sim_contact_tracing:
         # daily_active_surveillances.append(currently_being_surveilled)
         # self.contact_tracing_dict.update({"daily_active_surveillances": daily_active_surveillances})
 
-    def contact_trace_household(self, household_number):
+    def contact_trace_household(self, household: Household):
         """
         When a house is contact traced, we need to place all the nodes under surveillance.
 
         If any of the nodes are symptomatic, we need to isolate the household.
         """
-        household = self.houses.household(household_number)
-
         # Update the house to the contact traced status
         household.contact_traced = True
 
@@ -901,9 +899,9 @@ class household_sim_contact_tracing:
         # If there are any nodes in the house that are symptomatic, isolate the house:
         symptomatic_nodes = [node for node in household.nodes() if node.symptom_onset_time <= self.time]
         if symptomatic_nodes != []:
-            self.isolate_household(household_number)
+            self.isolate_household(household)
         else:
-            self.isolate_household(household_number)
+            self.isolate_household(household)
 
     def perform_recoveries(self):
         """
@@ -970,7 +968,7 @@ class household_sim_contact_tracing:
         else:
             self.colour_node_edges_between_houses(house_to, house_from, self.failed_contact_tracing)
 
-    def isolate_household(self, household_number: int):
+    def isolate_household(self, household: Household):
         """
         Isolates a house so that all infectives in that household may no longer infect others.
 
@@ -981,8 +979,6 @@ class household_sim_contact_tracing:
 
         When a house has been contact traced, all nodes in the house are under surveillance for symptoms. When a node becomes symptomatic, the house moves to isolation status.
         """
-        household = self.houses.household(household_number)
-
         # The house moves to isolated status
         household.isolated = True
         # household.contact_traced = True
@@ -1023,11 +1019,10 @@ class household_sim_contact_tracing:
         if npr.binomial(1, self.leave_isolation_prob) == 1:
             node.isolated = False
 
-    def propagate_contact_tracing(self, household_number: int):
+    def propagate_contact_tracing(self, household: Household):
         """
         To be called after a node in a household either reports their symptoms, and gets tested, when a household that is under surveillance develops symptoms + gets tested.
         """
-        household = self.houses.household(household_number)
         # update the propagation data
         household.propagated_contact_tracing = True
         household.time_propagated_tracing = self.time
