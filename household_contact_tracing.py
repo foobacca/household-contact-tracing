@@ -162,45 +162,6 @@ class Node:
     def household(self) -> 'Household':
         return self.houses.household(self.household_id)
 
-    def as_dict(self) -> dict:
-        return {
-            "time_infected": self.time_infected,
-            "generation": self.generation,
-            "household": self.household_id,
-            "contact_traced": self.contact_traced,
-            "isolated": self.isolated,
-            "symptom_onset_time": self.symptom_onset_time,
-            "outside_house_contacts_made": self.outside_house_contacts_made,
-            "had_contacts_traced": self.had_contacts_traced,
-            "spread_to": self.spread_to,
-            "serial_interval": self.serial_interval,
-            "recovered": self.recovered,
-            "recovery_time": self.recovery_time,
-            "will_report_infection": self.will_report_infection,
-            "time_of_reporting": self.time_of_reporting,
-            "has_contact_tracing_app": self.has_contact_tracing_app,
-            "testing_delay": self.testing_delay,
-        }
-
-    @classmethod
-    def from_dict(cls, nodes, houses, node_id, node_dict) -> 'Node':
-        return cls(nodes, houses, node_id, **node_dict)
-
-    def save(self):
-        self.nodes.update_node(self)
-
-    def update(self, **kwargs):
-        """
-        Change some values of this node and save back to the underlying
-        network graph.
-        The kwargs are the bits to update.  Example
-
-        node.update(isolated=True)
-        """
-        self.nodes.update_node(self, **kwargs)
-
-    # TODO: __setattr__ thing to save back to self.G
-
 
 class NodeCollection:
 
@@ -221,18 +182,11 @@ class NodeCollection:
             symptom_onset_time, serial_interval, recovery_time, will_report_infection,
             time_of_reporting, has_contact_tracing_app, testing_delay
         )
-        self.G.nodes[node_id].update(node.as_dict())
+        self.G.nodes[node_id]['node_obj'] = node
         return node
 
-    def update_node(self, node: Node, **kwargs):
-        node_dict = node.as_dict()
-        node_dict.update(kwargs)
-        self.G.nodes[node.node_id].update(node_dict)
-
     def node(self, node_id) -> Node:
-        return Node.from_dict(
-            self, self.houses, node_id, self.G.nodes[node_id]
-        )
+        return self.G.nodes[node_id]['node_obj']
 
     def all_nodes(self) -> Iterator[Node]:
         return (self.node(n) for n in self.G)
@@ -544,12 +498,13 @@ class household_sim_contact_tracing:
     def has_contact_tracing_app(self):
         return npr.binomial(1, self.prob_has_trace_app) == 1
 
-    def count_non_recovered_nodes(self):
+    def count_non_recovered_nodes(self) -> int:
         """Returns the number of nodes not in the recovered state.
         Returns:
             [int] -- Number of non-recovered nodes.
         """
-        return len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"]])
+        # TODO: BuG - if **not** recovered ??
+        return len([node for node in self.nodes.all_nodes() if node.recovered])
 
     def new_infection(self, node_count: int, generation: int, household_id: int, serial_interval=None):
         """
@@ -636,16 +591,14 @@ class household_sim_contact_tracing:
     def is_edge_app_traced(self, edge):
         """Returns whether both ends of an edge have the app, and the app does the tracing.
         """
-        node_1_app = self.G.nodes[edge[0]]["has_contact_tracing_app"]
-        node_2_app = self.G.nodes[edge[1]]["has_contact_tracing_app"]
-        return (node_2_app and node_1_app)
+        return self.nodes.node(edge[0]).has_contact_tracing_app and self.nodes.node(edge[1]).has_contact_tracing_app
 
     @property
     def active_infections(self):
         return [
-            node for node in self.G.nodes()
-            if (self.G.nodes[node]["time_of_reporting"] >= self.time and
-                self.G.nodes[node]["recovered"] is False)
+            node.node_id for node in self.nodes.all_nodes()
+            if node.time_of_reporting >= self.time
+            and not node.recovered
         ]
 
     def get_contact_rate_reduction(self, house_size):
@@ -713,7 +666,6 @@ class household_sim_contact_tracing:
 
             # Update how many contacts the node made
             node.outside_house_contacts_made += outside_household_contacts
-            node.save()
 
             # How many outside household contacts cause new infections
             outside_household_new_infections = npr.binomial(outside_household_contacts, current_prob_infection(days_since_infected, self.haz_rate_scale))
@@ -730,7 +682,6 @@ class household_sim_contact_tracing:
         # We record which node caused this infection
         infecting_node = self.nodes.node(infecting_node_id)
         infecting_node.spread_to.append(node_count)
-        infecting_node.save()
 
         infecting_node_household = infecting_node.household()
 
@@ -761,7 +712,6 @@ class household_sim_contact_tracing:
 
         # We record which node caused this infection
         infecting_node.spread_to.append(node_count)
-        infecting_node.save()
 
         # We record which house spread to which other house
         infecting_household.spread_to_ids.append(self.house_count)
@@ -939,7 +889,8 @@ class household_sim_contact_tracing:
         household.contact_traced = True
 
         # Update the nodes to the contact traced status
-        [node.update(contact_traced=True) for node in household.nodes()]
+        for node in household.nodes():
+            node.contact_traced = True
 
         # Colour the edges within household
         [
@@ -960,14 +911,16 @@ class household_sim_contact_tracing:
 
         time - The current time of the process, if a nodes recovery time equals the current time, then it is set to the recovered state
         """
-        [self.G.nodes()[node].update({"recovered": True}) for node in self.G.nodes() if self.G.nodes[node]["recovery_time"] == self.time]
+        for node in self.nodes.all_nodes():
+            if node.recovery_time == self.time:
+                node.recovered = True
 
     def colour_node_edges_between_houses(self, house_to: Household, house_from: Household, new_colour):
         # Annoying bit of logic to find the edge and colour it
         for node_1 in house_to.nodes():
             for node_2 in house_from.nodes():
-                if self.G.has_edge(node_1.node_id, node_2.node_id):
-                    self.G.edges[node_1.node_id, node_2.node_id].update({"colour": new_colour})
+                if self.nodes.G.has_edge(node_1.node_id, node_2.node_id):
+                    self.nodes.G.edges[node_1.node_id, node_2.node_id].update({"colour": new_colour})
 
     def attempt_contact_trace_of_household(self, house_to: Household, house_from: Household, contact_trace_delay: int = 0):
         # Decide if the edge was traced by the app
@@ -1037,7 +990,8 @@ class household_sim_contact_tracing:
 
         # Update every node in the house to the isolated status
         for node in household.nodes():
-            node.update(isolated=True, contact_traced=True)
+            node.isolated = True
+            node.contact_traced = True
 
         # Which house started the contact trace that led to this house being isolated, if there is one
         # A household may be being isolated because someone in the household self reported symptoms
@@ -1067,7 +1021,7 @@ class household_sim_contact_tracing:
         leave isolation
         """
         if npr.binomial(1, self.leave_isolation_prob) == 1:
-            self.G.nodes[node_id].update({"isolated": False})
+            self.nodes.node(node_id).isolated = False
 
     def propagate_contact_tracing(self, household_number: int):
         """
@@ -1130,12 +1084,9 @@ class household_sim_contact_tracing:
             and
             * it has been a minimum of 14 days since your household was isolated
         """
-        [
-            node.update(isolated=False)
-            for node in self.nodes.all_nodes()
-            if self.time >= node.symptom_onset_time + 7
-            and self.time >= node.household().isolated_time + 14
-        ]
+        for node in self.nodes.all_nodes():
+            if self.time >= node.symptom_onset_time + 7 and self.time >= node.household().isolated_time + 14:
+                node.isolated = False
 
     def simulate_one_day(self):
         """Simulates one day of the epidemic and contact tracing.
@@ -1213,7 +1164,7 @@ class household_sim_contact_tracing:
         self.timed_out = False  # flag for whether the simulation reached it's time limit without another stop condition being met
 
         # While loop ends when there are no non-isolated infections
-        currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
+        currently_infecting = len([node for node in self.nodes.all_nodes() if not node.recovered])
 
         while (currently_infecting != 0 and self.hit_8000 is False and self.timed_out is False):
 
@@ -1225,7 +1176,7 @@ class household_sim_contact_tracing:
             total_cases.append(node_count)
 
             # While loop ends when there are no non-isolated infections
-            currently_infecting = len([node for node in self.G.nodes() if self.G.nodes()[node]["isolated"] is False])
+            currently_infecting = len([node for node in self.nodes.all_nodes() if not node.isolated])
 
             # Records the first time we hit 800 under surveillance
             if (self.contact_tracing_dict["currently_being_surveilled"] > 800 and self.hit_800 is False):
@@ -1261,7 +1212,7 @@ class household_sim_contact_tracing:
         self.day_extinct = -1
 
         # While loop ends when there are no non-isolated infections
-        currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
+        currently_infecting = len([node for node in self.nodes.all_nodes() if not node.recovered])
 
         while self.end_reason == '':
 
@@ -1273,7 +1224,7 @@ class household_sim_contact_tracing:
             self.total_cases.append(node_count)
 
             # While loop ends when there are no non-isolated infections
-            currently_infecting = len([node for node in self.G.nodes() if self.G.nodes[node]["recovered"] is False])
+            currently_infecting = len([node for node in self.nodes.all_nodes() if not node.recovered])
 
             if currently_infecting == 0:
                 self.end_reason = 'extinct'
@@ -1339,45 +1290,48 @@ class household_sim_contact_tracing:
         """
         return Line2D([0, 1], [0, 1], color=clr, **kwargs)
 
-    def node_colour(self, node):
-        isolation_status = self.G.nodes[node]["isolated"]
-        contact_traced = self.G.nodes[node]["contact_traced"]
-        if isolation_status is True:
+    def node_colour(self, node: Node):
+        if node.isolated:
             return "yellow"
-        elif contact_traced is True:
+        elif node.contact_traced:
             return "orange"
         else:
             return "white"
 
     def draw_network(self):
 
-        node_colour_map = [self.node_colour(node) for node in self.G.nodes()]
+        node_colour_map = [self.node_colour(node) for node in self.nodes.all_nodes()]
 
         # The following chunk of code draws the pretty branching processes
-        edge_colour_map = [self.G.edges[edge]["colour"] for edge in self.G.edges()]
+        edge_colour_map = [self.nodes.G.edges[edge]["colour"] for edge in self.nodes.G.edges()]
 
         # Legend for explaining edge colouring
-        proxies = [self.make_proxy(clr, lw=1) for clr in (self.default_edge_colour,
-                                                    self.contact_traced_edge_colour_within_house,
-                                                    self.contact_traced_edge_between_house,
-                                                    self.app_traced_edge,
-                                                    self.failed_contact_tracing)]
-        labels = ("Transmission, yet to be traced",
-                "Within household contact tracing",
-                "Between household contact tracing",
-                "App traced edge",
-                "Failed contact trace")
+        proxies = [
+            self.make_proxy(clr, lw=1) for clr in (
+                self.default_edge_colour,
+                self.contact_traced_edge_colour_within_house,
+                self.contact_traced_edge_between_house,
+                self.app_traced_edge,
+                self.failed_contact_tracing
+            )
+        ]
+        labels = (
+            "Transmission, yet to be traced",
+            "Within household contact tracing",
+            "Between household contact tracing",
+            "App traced edge",
+            "Failed contact trace"
+        )
 
         node_households = {}
-        for node in self.G.nodes():
-            house = self.G.nodes[node]["household"]
-            node_households.update({node: house})
+        for node in self.nodes.all_nodes():
+            node_households.update({node.node_id: node.household_id})
 
         pos = graphviz_layout(self.G, prog='twopi')
         plt.figure(figsize=(8, 8))
 
         nx.draw(
-            self.G, pos, node_size=150, alpha=0.9, node_color=node_colour_map, edge_color=edge_colour_map,
+            self.nodes.G, pos, node_size=150, alpha=0.9, node_color=node_colour_map, edge_color=edge_colour_map,
             labels=node_households
         )
         plt.axis('equal')
@@ -1529,12 +1483,9 @@ class model_calibration(household_sim_contact_tracing):
             self.perform_recoveries()
 
             # set any node that was an outside-household infection to the recovered state, so that they are not simulated.
-            [
-                self.G.nodes[node].update({"recovered": True})
-                for node in self.G.nodes()
-                if self.G.nodes[node]["household"] not in starting_households
-                and self.G.nodes[node]["recovered"] is False
-            ]
+            for node in self.nodes.all_nodes():
+                if node.household_id not in starting_households and not node.recovered:
+                    node.recovered = True
 
             self.time += 1
 
@@ -1568,17 +1519,14 @@ class model_calibration(household_sim_contact_tracing):
 
             # set any node that was an outside-household infection to the recovered state, so that they are
             # not simulated.
-            [
-                self.G.nodes[node].update({"recovered": True})
-                for node in self.G.nodes()
-                if self.G.nodes[node]["household"] not in starting_households
-                and self.G.nodes[node]["recovered"] is False
-            ]
+            for node in self.nodes.all_nodes():
+                if node.household_id not in starting_households and not node.recovered:
+                    node.recovered = True
 
             self.time += 1
 
         return [
-            len(self.G.nodes[node]["spread_to"])
-            for node in self.G.nodes()
-            if self.G.nodes[node]["household"] in starting_households
+            len(node.spread_to)
+            for node in self.nodes.all_nodes()
+            if node.household_id in starting_households
         ]

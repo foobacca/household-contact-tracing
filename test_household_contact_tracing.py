@@ -191,7 +191,7 @@ def test_get_edge_between_household():
         household_id=2)
 
     # add an edge between the infections
-    model.G.add_edge(1, 2)
+    model.nodes.G.add_edge(1, 2)
 
     house1 = model.houses.household(1)
     house2 = model.houses.household(2)
@@ -236,7 +236,7 @@ def test_is_app_traced():
         household_id=2)
 
     # add an edge between the infections
-    model.G.add_edge(1, 2)
+    model.nodes.G.add_edge(1, 2)
     assert model.is_edge_app_traced((1, 2))
 
 
@@ -270,8 +270,8 @@ def test_new_outside_household_infection():
     )
 
     assert model.house_count == 2
-    assert model.G.nodes[1]["spread_to"] == [2]
-    assert model.G.has_edge(1, 2)
+    assert model.nodes.node(1).spread_to == [2]
+    assert model.nodes.G.has_edge(1, 2)
 
 
 def test_within_household_infection():
@@ -312,7 +312,7 @@ def test_within_household_infection():
     assert node2.household_id == 1
     assert node2.serial_interval == 10
     assert node2.generation == 2
-    assert model.G.edges[1, 2]["colour"] == "black"
+    assert model.nodes.G.edges[1, 2]["colour"] == "black"
     assert house.within_house_edges == [(1, 2)]
 
 
@@ -338,9 +338,10 @@ def test_perform_recoveries():
         generation=1,
         household_id=1)
 
-    model.G.nodes[1]["recovery_time"] = 0
+    node1 = model.nodes.node(1)
+    node1.recovery_time = 0
     model.perform_recoveries()
-    assert model.G.nodes[1]["recovered"] is True
+    assert node1.recovered is True
 
 
 def test_colour_edges_between_houses():
@@ -375,7 +376,7 @@ def test_colour_edges_between_houses():
     house1 = model.houses.household(1)
     house2 = model.houses.household(2)
     model.colour_node_edges_between_houses(house1, house2, "yellow")
-    assert model.G.edges[1, 2]["colour"] == "yellow"
+    assert model.nodes.G.edges[1, 2]["colour"] == "yellow"
 
 
 def test_overide_testing_delay():
@@ -446,14 +447,15 @@ def test_leave_isolation():
         leave_isolation_prob=1)
 
     # set node 1 to the isolation status
-    model.G.nodes[1]["isolated"] = True
+    node1 = model.nodes.node(1)
+    node1.isolated = True
 
     # see if the node leaves isolation over the next 50 days
     for _ in range(50):
         model.decide_if_leave_isolation(node_id=1)
         model.time += 1
 
-    assert model.G.nodes[1]["isolated"] is False
+    assert node1.isolated is False
 
 
 def test_update_adherence_to_isolation():
