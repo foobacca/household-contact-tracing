@@ -191,67 +191,6 @@ class NodeCollection:
     def all_nodes(self) -> Iterator[Node]:
         return (self.node(n) for n in self.G)
 
-    def nodes_in_latest_gen(self, time) -> Iterator[Node]:
-        return (
-            node for node in self.all_nodes()
-            if not node.isolated
-            and not node.recovered
-            and node.time_of_reporting >= time
-        )
-
-    def currently_infecting(self) -> Iterator[Node]:
-        return (
-            node for node in self.all_nodes()
-            if not node.isolated
-            and not node.recovered
-        )
-
-    def newly_reported(self, time) -> Iterator[Node]:
-        # The following chunk of code is to record counts of how many contacts
-        # must be traced, used for evaluating when capacity is reached.
-        # Get all the cases that have reported their infection today
-        return (
-            node for node in self.all_nodes()
-            if not node.had_contacts_traced
-            and node.time_of_reporting == time
-        )
-
-    def symptomatic_in_household(self, time, household_number) -> Iterator[Node]:
-        return (
-            node for node in self.all_nodes()
-            if node.symptom_onset_time <= time
-            and node.household_id == household_number
-        )
-
-    def new_symptomatic(self, time) -> Iterator[Node]:
-        # For nodes who have just onset symptoms, but their household has been
-        # contact traced, now trace their contacts
-        return (
-            node for node in self.all_nodes()
-            if not node.had_contacts_traced
-            and node.symptom_onset_time == time
-            and node.contact_traced
-        )
-
-    def reporting_and_non_isolated_households(self, time) -> Iterator['Household']:
-        unique_household_ids = set((
-            node.household_id for node in self.all_nodes()
-            if node.time_of_reporting == time
-            and not node.isolated
-        ))
-        return (self.houses.household(hid) for hid in unique_household_ids)
-
-    def perform_recoveries(self, time):
-        """
-        Loops over all nodes in the branching process and determines recoveries.
-
-        time - The current time of the process, if a nodes recovery time equals the current time, then it is set to the recovered state
-        """
-        [
-            self.G.nodes[node].update({"recovered": True}) for node in self.G
-            if self.G.nodes[node]["recovery_time"] == time
-        ]
-
 
 class Household:
 
