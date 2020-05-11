@@ -258,6 +258,8 @@ def test_new_outside_household_infection():
         infected_by=None,
         infected_by_node=None)
 
+    node1 = model.nodes.node(1)
+
     # infection 1
     model.new_infection(
         node_count=1,
@@ -265,12 +267,12 @@ def test_new_outside_household_infection():
         household_id=1)
 
     model.new_outside_household_infection(
-        infecting_node_id=1,
+        infecting_node=node1,
         serial_interval=1
     )
 
     assert model.house_count == 2
-    assert model.nodes.node(1).spread_to == [2]
+    assert node1.spread_to == [2]
     assert model.nodes.G.has_edge(1, 2)
 
 
@@ -296,15 +298,15 @@ def test_within_household_infection():
         generation=1,
         household_id=1)
 
+    node1 = model.nodes.node(1)
     house = model.houses.household(1)
     house.house_size = 2
     house.susceptibles = 1
 
     model.new_within_household_infection(
-        infecting_node_id=1,
+        infecting_node=node1,
         serial_interval=10)
 
-    node1 = model.nodes.node(1)
     node2 = model.nodes.node(2)
 
     assert house.susceptibles == 0
@@ -361,6 +363,8 @@ def test_colour_edges_between_houses():
         infected_by=None,
         infected_by_node=None)
 
+    node1 = model.nodes.node(1)
+
     model.new_infection(
         node_count=1,
         generation=1,
@@ -369,7 +373,7 @@ def test_colour_edges_between_houses():
     model.node_count = 2
 
     model.new_outside_household_infection(
-        infecting_node_id=1,
+        infecting_node=node1,
         serial_interval=10
     )
 
@@ -452,7 +456,7 @@ def test_leave_isolation():
 
     # see if the node leaves isolation over the next 50 days
     for _ in range(50):
-        model.decide_if_leave_isolation(node_id=1)
+        model.decide_if_leave_isolation(node=node1)
         model.time += 1
 
     assert node1.isolated is False
