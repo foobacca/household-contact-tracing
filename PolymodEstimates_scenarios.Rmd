@@ -1,0 +1,188 @@
+---
+title: "Estimates from Polymod Data"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+We need to estimate the following parameters;
+1) What proportion of contacts are within household?
+
+```{r}
+library(socialmixr)
+library(dplyr)
+library(modelr)
+```
+
+We want to do a really simple model of household size and the number of contacts that occur within the household.
+
+```{r}
+data(polymod)
+```
+
+```{r}
+contacts = polymod$contacts
+participants = polymod$participants
+```
+
+```{r}
+# Join the participant data frame to the dataframe that stores contact data on the participant ID and filter to the United Kingdom
+model_data = participants %>%
+  filter(country == "United Kingdom") %>%
+  left_join(contacts, by = "part_id")# %>%
+  #select(part_id, hh_size, cnt_home, frequency_multi)
+```
+
+# Multiple contacts
+Some contacts occur at multiple locations, so we end up overcounting. This isn't an issue, until we get to the scenario modelling, so following the lead of polymod we are going to put these in a multiple category and just filter them out.
+
+
+```{r}
+model_data_no_multiple = model_data %>%
+  filter(cnt_home == 1 | cnt_work == 1 | cnt_school == 1 | cnt_transport == 1 | cnt_leisure == 1 | cnt_otherplace == 1)
+  
+```
+
+
+By household size.
+
+```{r}
+summary = model_data_no_multiple %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_home)) %>%
+  summarize(prop_within_house = mean(cnt_home), n = n())
+summary
+prop_within_house <- as.numeric(unlist(summary[1]))
+```
+
+Prop work contacts
+
+```{r}
+summary = model_data_no_multiple %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_work)) %>%
+  summarize(prop_work = mean(cnt_work), n = n())
+prop_work <- unlist(as.numeric(summary[1]))
+
+summary = model_data_no_multiple %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_work)) %>%
+  summarize(sum_work = sum(cnt_work), n = n())
+mean.work <-mean(as.numeric(unlist(summary[2])))
+```
+ 
+ Transport (add in to work)
+
+```{r}
+summary = model_data_no_multiple %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_transport)) %>%
+  summarize(prop_transport = mean(cnt_transport), n = n())
+summary
+prop_transport <- unlist(as.numeric(summary[1]))
+
+summary = model_data_no_multiple %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_transport)) %>%
+  summarize(sum_transport = sum(cnt_transport), n = n())
+mean.transport <-mean(as.numeric(unlist(summary[2])))
+```
+
+
+By household, prop school contacts.
+
+```{r}
+summary = model_data_no_multiple %>%
+#  group_by(hh_size) %>%
+  filter(!is.na(cnt_school)) %>%
+  summarize(prop_school = mean(cnt_school), n = n())
+summary[1]
+prop_school <- unlist(as.numeric(summary[1]))
+
+summary = model_data_no_multiple %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_school)) %>%
+  summarize(sum_school = sum(cnt_school), n = n())
+mean.school <-mean(as.numeric(unlist(summary[2])))
+```
+
+
+```{r}
+summary = model_data_no_multiple %>%
+# group_by(hh_size) %>%
+  filter(!is.na(cnt_leisure)) %>%
+  summarize(prop_leisure = mean(cnt_leisure), n = n())
+prop_leisure <- unlist(as.numeric(summary[1]))
+
+summary = model_data_no_multiple %>%
+ group_by(part_id) %>%
+  filter(!is.na(cnt_leisure)) %>%
+  summarize(sum_leisure = sum(cnt_leisure), n = n())
+mean.leisure <-mean(as.numeric(unlist(summary[2])))
+```
+
+```{r}
+
+types <- c("work_travel","school","leisure")
+poly_prop <- c((prop_work+prop_transport), prop_school, prop_leisure)
+pop <- poly_prop/(1-prop_within_house)
+poly_num <- c((mean.work+mean.transport),mean.school, mean.leisure)
+red_num <- 0.2*poly_num
+num_now <- c(0.6,0,0)
+current <- c(0.5,0,0)*pop
+may <- c((1.2*num_now[1]), 0.11*poly_num[2], 0*poly_num[3])
+jun <- c((1.2*1.1*num_now[1]), 0.25*poly_num[2], 0.1*poly_num[3])
+jul <- c((1.2*1.1^2*num_now[1]), 0.60*poly_num[2], 0.3*poly_num[3])
+aug <- c((1.2*1.1^3*num_now[1]), 1*poly_num[2], 0.75*poly_num[3])
+
+# These give projected NUMBERS of contacts for each scenario month by type
+## (Gave up trying to work entirely with proportions, so working woth mean numbers of contacts instead)
+## Had to assume 10% of usual (ie polymod) leisure compared to now because we are assuming leisure is currently 0
+## Looks like about 0.6 work contacts right now person according to CoMix
+scen1 <- cbind.data.frame(types, poly_num, red_num, num_now, poly_prop, pop, current, may, jun, jul, aug)
+
+jun2 <- c((1.2*1.1*num_now[1]), 0.5*poly_num[2], 0.1*poly_num[3])
+
+scen2 <- cbind.data.frame(types, poly_num, red_num, num_now, poly_prop, pop, current, may, jun2, jul, aug)
+
+#Numbers of outside contacts per type
+
+adults1 <- cbind(may[-2], jun[-2], jul[-2], aug[-2])
+chil1 <- cbind(may[-1], jun[-1], jul[-1], aug[-1])
+tot.adult1 <- colSums(adults1)
+tot.chil1 <- colSums(chil1)
+
+adults2 <- cbind(may[-2], jun2[-2], jul[-2], aug[-2])
+chil2 <- cbind(may[-1], jun2[-1], jul[-1], aug[-1])
+tot.adult2 <- colSums(adults2)
+tot.chil2 <- colSums(chil2)
+
+hh1.1 <- tot.adult1
+hh2.1 <- 2*tot.adult1
+hh3.1 <- hh2.1+tot.chil1
+hh4.1 <- hh3.1+tot.chil1
+hh5.1 <- hh4.1+tot.chil1
+hh6.1 <- hh5.1+tot.chil1
+
+scen1.contacts<- data.frame(matrix(as.numeric(unlist(rbind(hh1.1, hh2.1, hh3.1, hh4.1, hh5.1, hh6.1))), ncol=4))
+colnames(scen1.contacts) <- c("may", "jun", "jul", "aug")
+rownames(scen1.contacts) <- c("hh1", "hh2", "hh3", "hh4", "hh5", "hh6")
+
+hh1.2 <- tot.adult2
+hh2.2 <- 2*tot.adult2
+hh3.2 <- hh2.2+tot.chil2
+hh4.2 <- hh3.2+tot.chil2
+hh5.2 <- hh4.2+tot.chil2
+hh6.2 <- hh5.2+tot.chil2
+
+scen2.contacts<- data.frame(matrix(as.numeric(unlist(rbind(hh1.2, hh2.2, hh3.2, hh4.2, hh5.2, hh6.2))), ncol=4))
+colnames(scen2.contacts) <- c("may", "jun", "jul", "aug")
+rownames(scen2.contacts) <- c("hh1", "hh2", "hh3", "hh4", "hh5", "hh6")
+
+write.csv(scen1.contacts,"Data/scen1_mean_contacts.csv", row.names = T)
+
+write.csv(scen2.contacts,"Data/scen2_mean_contacts.csv", row.names = T)
+
+
+
+```
