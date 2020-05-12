@@ -9,7 +9,7 @@ import numpy.random as npr
 
 # Outputs are saved to Data/calibration_R0_vals.xlsx
 
-household_hazard_rate = 0.72219
+#household_hazard_rate = 0.72219
 
 def estimate_R0(hazard_rate_scale):
     """For a given hazard rate scaling, estimates the R_0 value using the model_calibration class
@@ -19,7 +19,7 @@ def estimate_R0(hazard_rate_scale):
     """
 
     model_calibration = hct.model_calibration(haz_rate_scale = hazard_rate_scale,
-                                            household_haz_rate_scale = household_hazard_rate,
+                                            #household_haz_rate_scale = household_hazard_rate,
                                             contact_tracing_success_prob = 2/3,
                                             contact_trace_delay_par = 1/3,
                                             overdispersion = 0.36,
