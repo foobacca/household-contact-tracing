@@ -506,3 +506,118 @@ def test_default_household_haz_rate_scale():
     )
 
     assert model.household_haz_rate_scale == 0.8
+
+def test_node_colour():
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.8,
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    model.G.nodes[1]["isolated"] = True
+    model.G.nodes[2]["contact_traced"] = True
+    
+    assert model.node_colour(1) is "yellow"
+    assert model.node_colour(2) is "orange"
+    assert model.node_colour(3) is "white"
+
+def test_onset_to_isolation_times():
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.8,
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    model.isolate_household(1)
+
+    assert model.onset_to_isolation_times() == [-model.G.nodes[1]["symptom_onset"]]
+
+    assert  model.onset_to_isolation_times(include_self_reports=False) == []
+
+
+def test_infection_to_isolation_times():
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.8,
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    model.isolate_household(1)
+
+    assert model.infected_to_isolation_times() == [0]
+
+    assert model.infected_to_isolation_times(include_self_reports=False) == []
+
+def test_household_haz_rate_scale():
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.8,
+        #household_haz_rate_scale=0
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    assert model.household_haz_rate_scale == 0.8
+
+    # set up a model
+    model = hct.household_sim_contact_tracing(
+        haz_rate_scale=0.8,
+        household_haz_rate_scale=1,
+        contact_tracing_success_prob=0.7,
+        contact_trace_delay_par=2,
+        overdispersion=0.36,
+        infection_reporting_prob=0.5,
+        contact_trace=True,
+        reduce_contacts_by=0.0,
+        do_2_step=False,
+        test_before_propagate_tracing=False,
+        prob_has_trace_app=0.0,
+        starting_infections=10,
+        hh_prob_propensity_to_leave_isolation=1
+    )
+
+    assert model.household_haz_rate_scale == 1
+
