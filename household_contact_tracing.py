@@ -1151,23 +1151,18 @@ class household_sim_contact_tracing:
                 and self.house_dict[self.G.nodes[node]["household"]]["being_contact_traced_from"] != None
             ]
 
-    def get_cmap(self, n, name='hsv'):
-        '''
-        Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
-        RGB color; the keyword argument name must be a standard mpl colormap name.
-        '''
-        return plt.cm.get_cmap(name, n)
 
     def make_proxy(self, clr, **kwargs):
-        """[summary]
+        """Used to draw the lines we use in the draw network legend.
 
         Arguments:
-            clr {[type]} -- [description]
+            clr {str} -- the colour of the line to be drawn.
 
         Returns:
-            [type] -- [description]
+            Line2D -- A Line2D object to be passed to the 
         """
         return Line2D([0, 1], [0, 1], color=clr, **kwargs)
+
 
     def node_colour(self, node):
         isolation_status = self.G.nodes[node]["isolated"]
@@ -1178,6 +1173,7 @@ class household_sim_contact_tracing:
             return "orange"
         else:
             return "white"
+
 
     def draw_network(self):
 
