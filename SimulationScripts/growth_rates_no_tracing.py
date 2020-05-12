@@ -11,14 +11,15 @@ import itertools as it
 # across all social distancing possibilities. Uses the calibration dictionary to tune 
 # itself across all infection reporting probabilities.
 
-# Epidemics have exponential growth, don't make this too large as this is difficult for the computer
+# Epidemics have exponential growth, don't make this too large as this is difficult for
+# computers to handle
 days_to_simulate = 20
 
 # Importing the calibration dictionary
 with open('../Data/Calibration/hazard_rate_detection_prob_pairs.pickle', 'rb') as handle:
     pairs_dict = pickle.load(handle)
 
-# Setting up the parameter grid:
+# Setting up the parameter grid
 global_reduction_in_contacts = np.linspace(0, 0.9)
 infection_reporting_prob_range = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 parameter_grid = it.product(global_reduction_in_contacts, infection_reporting_prob_range)
