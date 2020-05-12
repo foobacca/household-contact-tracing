@@ -39,4 +39,4 @@ if __name__ == '__main__':
             "R0_estimate": results
         })
 
-        results.to_excel("Data/calibration_R0_vals.xlsx")
+        results.to_excel("../Data/calibration_R0_vals.xlsx")
