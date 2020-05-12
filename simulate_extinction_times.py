@@ -89,6 +89,6 @@ if __name__ == '__main__':
         results = p.map(run_simulation, range(repeats))
         results = pd.DataFrame(results)
         results = results.rename(columns=col_names_dict)
-        results.to_excel("Data/Extinction Times/Exit Modelling/phase1.xlsx")
+        results.to_excel("../Data/Extinction Times/Exit Modelling/phase1.xlsx")
 
 
