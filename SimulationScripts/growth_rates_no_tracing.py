@@ -6,8 +6,12 @@ import numpy as np
 import numpy.random as npr
 import itertools as it
 
+# Simulation Script Purpose:
+# This script is used to compute the growth rate of the epidemic without contact tracing
+# across all social distancing possibilities. Uses the calibration dictionary to tune 
+# itself across all infection reporting probabilities.
 
-# Epidemics have exponential growth, don't make this too large.
+# Epidemics have exponential growth, don't make this too large as this is difficult for the computer
 days_to_simulate = 20
 
 # Importing the calibration dictionary
@@ -22,7 +26,7 @@ parameter_grid = it.product(global_reduction_in_contacts, infection_reporting_pr
 # Function to set up and run the simulation
 def run_simulation(pars):
 
-    # Un pack the parameters
+    # Unpack the parameters
     global_contact_reduction, infection_reporting_prob = pars
 
     # Get the corresponding hazard rate scale from the calibration dictionary
