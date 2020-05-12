@@ -11,7 +11,7 @@ import itertools as it
 days_to_simulate = 20
 
 # Importing the calibration dictionary
-with open('Data/Calibration/hazard_rate_detection_prob_pairs.pickle', 'rb') as handle:
+with open('../Data/Calibration/hazard_rate_detection_prob_pairs.pickle', 'rb') as handle:
     pairs_dict = pickle.load(handle)
 
 # Setting up the parameter grid:
@@ -64,4 +64,4 @@ if __name__ == '__main__':
         results = p.map(run_simulation, parameter_grid)
         results = pd.DataFrame(results)
         results = results.rename(columns=col_names_dict)
-        results.to_excel("Data/Reference/growth_rates_no_tracing.xlsx")
+        results.to_excel("../Data/Reference/growth_rates_no_tracing.xlsx")
