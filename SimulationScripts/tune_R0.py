@@ -15,7 +15,7 @@ def estimate_R0(hazard_rate_scale):
     """For a given hazard rate scaling, estimates the R_0 value using the model_calibration class
 
     Arguments:
-        hazard_rate_scale {[type]} -- [description]
+        hazard_rate_scale {float} -- The parameter th scales the hazard rate, this controls the overall infectivity.
     """
 
     model_calibration = hct.model_calibration(haz_rate_scale = hazard_rate_scale,
