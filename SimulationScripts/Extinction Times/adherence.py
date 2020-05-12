@@ -133,4 +133,4 @@ if __name__ == '__main__':
         results = p.map(run_simulation, range(repeats))
         results = pd.DataFrame(results)
         results = results.rename(columns=col_names_dict)
-        results.to_excel("../Data/Extinction Times/Exit Strategy/phase4.xlsx")
+        results.to_excel("../Data/Extinction Times/Exit Strategy/phase4_adherence.xlsx")
