@@ -3,7 +3,8 @@ import household_contact_tracing as model
 import pandas as pd
 import numpy.random as npr
 
-# npr.seed(1)
+# Simulation Script Purpose:
+# This simulation script simulates an epidemic until either it goes extinct, times out, or the limit is hit.
 
 repeats = 1000
 days_to_simulate = 60
@@ -78,7 +79,6 @@ simulation_names = [
     "extinction_time"
 ]
 
-
 col_names = param_names + simulation_names + [str(i) for i in range(days_to_simulate)]
 col_names_dict = {}
 for i in range(len(col_names)):
@@ -90,5 +90,3 @@ if __name__ == '__main__':
         results = pd.DataFrame(results)
         results = results.rename(columns=col_names_dict)
         results.to_excel("../Data/Extinction Times/Exit Modelling/phase1.xlsx")
-
-
