@@ -2,41 +2,35 @@ from multiprocessing import Pool
 import household_contact_tracing as model
 import pandas as pd
 import numpy.random as npr
+import pickle
 
 # npr.seed(1)
 
-repeats = 200
+repeats = 100
 days_to_simulate = 25
 starting_infections = 5000
 
-# control parameters
-infection_detect_prob = [0.2, 0.4, 0.6, 0.8]
-haz_rate_range = [0.816914, 0.819325, 0.809742, 0.806271]
-
-par_range = [
-    (0.2, 0.816914),
-    (0.4, 0.819325),
-    (0.6, 0.809742),
-    (0.6, 0.806271)
-]
+# Importing the calibration dictionary
+with open('Data/Calibration/hazard_rate_detection_prob_pairs.pickle', 'rb') as handle:
+    pairs_dict = pickle.load(handle)
 
 def run_simulation(repeat):
 
-    # Choose a random case detection probability
-    random_index = npr.choice(range(4))
-    infection_reporting_prob, haz_rate_scale = par_range[random_index]
+    infection_reporting_prob = npr.choice([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+
+    haz_rate_scale = pairs_dict[infection_reporting_prob]
 
     contact_tracing_success_prob = npr.uniform(0.7, 0.95)
 
     contact_trace_delay_par = npr.uniform(1.5, 2.5)
 
-    reduce_contacts_by = npr.uniform(0.4, 0.9)
+    reduce_contacts_by = npr.uniform(0.0, 0.9)
 
     do_2_step = npr.choice([True, False])
 
     prob_has_trace_app = npr.uniform(0, 0.5)
 
-    prob_household_prop_not_adhere = npr.uniform(0.05, 0.5)
+    prob_household_prop_not_adhere = npr.uniform(0.0, 0.5)
 
     prob_not_adhere = npr.uniform(0.01, 0.05)
 
@@ -49,7 +43,7 @@ def run_simulation(repeat):
                                                      reduce_contacts_by=reduce_contacts_by,
                                                      do_2_step=do_2_step,
                                                      test_before_propagate_tracing=False,
-                                                     prob_has_trace_app=0.5,
+                                                     prob_has_trace_app=prob_has_trace_app,
                                                      starting_infections=starting_infections,
                                                      hh_prob_propensity_to_leave_isolation=prob_household_prop_not_adhere,
                                                      leave_isolation_prob=prob_not_adhere)
@@ -92,4 +86,4 @@ if __name__ == '__main__':
         results = p.map(run_simulation, range(repeats))
         results = pd.DataFrame(results)
         results = results.rename(columns=col_names_dict)
-        results.to_excel("Data/simulation_results_no_test_delays_adherence_model.xlsx")
+        results.to_excel("Data/simulation_results_no_tracing_adherence.xlsx")
