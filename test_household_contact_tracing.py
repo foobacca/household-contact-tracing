@@ -144,14 +144,14 @@ def test_new_household():
                         infected_by=6,
                         infected_by_node=3)
 
-    house = model.house_dict[10]
+    house = model.houses.household(10)
 
-    assert house["size"] in [1, 2, 3, 4, 5, 6]
-    assert house["time"] == 100
-    assert house["size"] - 1 == house["susceptibles"]
-    assert house["generation"] == 5
-    assert house["infected_by"] == 6
-    assert house["infected_by_node"] == 3
+    assert house.size in [1, 2, 3, 4, 5, 6]
+    assert house.time == 100
+    assert house.size - 1 == house.susceptibles
+    assert house.generation == 5
+    assert house.infected_by_id == 6
+    assert house.infected_by_node == 3
 
 
 def test_get_edge_between_household():
@@ -175,7 +175,7 @@ def test_get_edge_between_household():
     model.new_infection(
         node_count=1,
         generation=1,
-        household=1)
+        household_id=1)
 
     # household 2
     model.new_household(
@@ -188,12 +188,14 @@ def test_get_edge_between_household():
     model.new_infection(
         node_count=2,
         generation=2,
-        household=2)
+        household_id=2)
 
     # add an edge between the infections
-    model.G.add_edge(1, 2)
+    model.nodes.G.add_edge(1, 2)
 
-    assert model.get_edge_between_household(1, 2) == (1, 2)
+    house1 = model.houses.household(1)
+    house2 = model.houses.household(2)
+    assert model.get_edge_between_household(house1, house2) == (1, 2)
 
 
 def test_is_app_traced():
@@ -218,7 +220,7 @@ def test_is_app_traced():
     model.new_infection(
         node_count=1,
         generation=1,
-        household=1)
+        household_id=1)
 
     # household 2
     model.new_household(
@@ -231,10 +233,10 @@ def test_is_app_traced():
     model.new_infection(
         node_count=2,
         generation=2,
-        household=2)
+        household_id=2)
 
     # add an edge between the infections
-    model.G.add_edge(1, 2)
+    model.nodes.G.add_edge(1, 2)
     assert model.is_edge_app_traced((1, 2))
 
 
@@ -256,20 +258,22 @@ def test_new_outside_household_infection():
         infected_by=None,
         infected_by_node=None)
 
+    node1 = model.nodes.node(1)
+
     # infection 1
     model.new_infection(
         node_count=1,
         generation=1,
-        household=1)
+        household_id=1)
 
     model.new_outside_household_infection(
-        infecting_node=1,
+        infecting_node=node1,
         serial_interval=1
     )
 
     assert model.house_count == 2
-    assert model.G.nodes[1]["spread_to"] == [2]
-    assert model.G.has_edge(1, 2)
+    assert node1.spread_to == [2]
+    assert model.nodes.G.has_edge(1, 2)
 
 
 def test_within_household_infection():
@@ -292,22 +296,26 @@ def test_within_household_infection():
     model.new_infection(
         node_count=1,
         generation=1,
-        household=1)
+        household_id=1)
 
-    model.house_dict[1]["house_size"] = 2
-    model.house_dict[1]["susceptibles"] = 1
+    node1 = model.nodes.node(1)
+    house = model.houses.household(1)
+    house.house_size = 2
+    house.susceptibles = 1
 
     model.new_within_household_infection(
-        infecting_node=1,
+        infecting_node=node1,
         serial_interval=10)
 
-    assert model.house_dict[1]["susceptibles"] == 0
-    assert model.G.nodes[1]["spread_to"] == [2]
-    assert model.G.nodes[2]["household"] == 1
-    assert model.G.nodes[2]["serial_interval"] == 10
-    assert model.G.nodes[2]["generation"] == 2
-    assert model.G.edges[1, 2]["colour"] == "black"
-    assert model.house_dict[1]["within_house_edges"] == [(1, 2)]
+    node2 = model.nodes.node(2)
+
+    assert house.susceptibles == 0
+    assert node1.spread_to == [2]
+    assert node2.household_id == 1
+    assert node2.serial_interval == 10
+    assert node2.generation == 2
+    assert model.nodes.G.edges[1, 2]["colour"] == "black"
+    assert house.within_house_edges == [(1, 2)]
 
 
 def test_perform_recoveries():
@@ -330,11 +338,12 @@ def test_perform_recoveries():
     model.new_infection(
         node_count=1,
         generation=1,
-        household=1)
+        household_id=1)
 
-    model.G.nodes[1]["recovery_time"] = 0
+    node1 = model.nodes.node(1)
+    node1.recovery_time = 0
     model.perform_recoveries()
-    assert model.G.nodes[1]["recovered"] is True
+    assert node1.recovered is True
 
 
 def test_colour_edges_between_houses():
@@ -354,20 +363,24 @@ def test_colour_edges_between_houses():
         infected_by=None,
         infected_by_node=None)
 
+    node1 = model.nodes.node(1)
+
     model.new_infection(
         node_count=1,
         generation=1,
-        household=1)
+        household_id=1)
 
     model.node_count = 2
 
     model.new_outside_household_infection(
-        infecting_node=1,
+        infecting_node=node1,
         serial_interval=10
     )
 
-    model.colour_node_edges_between_houses(1, 2, "yellow")
-    assert model.G.edges[1, 2]["colour"] == "yellow"
+    house1 = model.houses.household(1)
+    house2 = model.houses.household(2)
+    model.colour_node_edges_between_houses(house1, house2, "yellow")
+    assert model.nodes.G.edges[1, 2]["colour"] == "yellow"
 
 
 def test_overide_testing_delay():
@@ -383,6 +396,7 @@ def test_overide_testing_delay():
 
     assert model.testing_delay() == 0
 
+
 def test_hh_prob_leave_iso_default():
     model = hct.household_sim_contact_tracing(
         haz_rate_scale=0.805,
@@ -393,6 +407,7 @@ def test_hh_prob_leave_iso_default():
         contact_trace=True,
         test_before_propagate_tracing=False)
     assert model.hh_propensity_to_leave_isolation() == 0
+
 
 def test_hh_prob_leave_iso():
     model = hct.household_sim_contact_tracing(
@@ -406,6 +421,7 @@ def test_hh_prob_leave_iso():
         hh_prob_propensity_to_leave_isolation=1)
     assert model.hh_propensity_to_leave_isolation() == 1
 
+
 def test_hh_has_propensity_attr():
     model = hct.household_sim_contact_tracing(
         haz_rate_scale=0.805,
@@ -417,7 +433,8 @@ def test_hh_has_propensity_attr():
         test_before_propagate_tracing=False,
         hh_prob_propensity_to_leave_isolation=0.5)
 
-    assert model.house_dict[1]["propensity_to_leave_isolation"] in (True, False)
+    assert model.houses.household(1).propensity_to_leave_isolation in (True, False)
+
 
 def test_leave_isolation():
 
@@ -434,14 +451,16 @@ def test_leave_isolation():
         leave_isolation_prob=1)
 
     # set node 1 to the isolation status
-    model.G.nodes[1]["isolated"] = True
+    node1 = model.nodes.node(1)
+    node1.isolated = True
 
     # see if the node leaves isolation over the next 50 days
     for _ in range(50):
-        model.decide_if_leave_isolation(node = 1)
+        model.decide_if_leave_isolation(node=node1)
         model.time += 1
 
-    assert model.G.nodes[1]["isolated"] == False
+    assert node1.isolated is False
+
 
 def test_update_adherence_to_isolation():
 
@@ -464,28 +483,24 @@ def test_update_adherence_to_isolation():
 
     model.run_simulation(20)
 
-    initially_isolated = [
-        node 
-        for node in model.G.nodes()
-        if (
-            model.G.nodes[node]["isolated"] is True and
-            model.G.nodes[node]["recovered"] is False and
-            model.house_dict[model.G.nodes[node]["household"]]["propensity_to_leave_isolation"]
-        )
+    initially_isolated_ids = [
+        node.node_id for node in model.nodes.all_nodes()
+        if node.isolated
+        and not node.recovered
+        and node.household().propensity_to_leave_isolation
     ]
 
     model.update_adherence_to_isolation()
 
-    secondary_isolated = [
-        node 
-        for node in model.G.nodes()
-        if (
-            model.G.nodes[node]["isolated"] is True and
-            model.G.nodes[node]["recovered"] is False and
-            model.house_dict[model.G.nodes[node]["household"]]["propensity_to_leave_isolation"]
-    )]
+    secondary_isolated_ids = [
+        node.node_id for node in model.nodes.all_nodes()
+        if node.isolated
+        and not node.recovered
+        and node.household().propensity_to_leave_isolation
+    ]
 
-    assert initially_isolated != secondary_isolated
+    assert initially_isolated_ids != secondary_isolated_ids
+
 
 def test_default_household_haz_rate_scale():
 
@@ -525,12 +540,15 @@ def test_node_colour():
         hh_prob_propensity_to_leave_isolation=1
     )
 
-    model.G.nodes[1]["isolated"] = True
-    model.G.nodes[2]["contact_traced"] = True
+    node1 = model.nodes.node(1)
+    node1.isolated = True
+    node2 = model.nodes.node(2)
+    node2.had_contacts_traced = True
+    node3 = model.nodes.node(3)
     
-    assert model.node_colour(1) is "yellow"
-    assert model.node_colour(2) is "orange"
-    assert model.node_colour(3) is "white"
+    assert model.node_colour(node1) is "yellow"
+    assert model.node_colour(node2) is "orange"
+    assert model.node_colour(node3) is "white"
 
 def test_onset_to_isolation_times():
 
@@ -550,9 +568,10 @@ def test_onset_to_isolation_times():
         hh_prob_propensity_to_leave_isolation=1
     )
 
-    model.isolate_household(1)
+    model.isolate_household(model.houses.household(1))
+    node1 = model.nodes.node(1)
 
-    assert model.onset_to_isolation_times() == [-model.G.nodes[1]["symptom_onset"]]
+    assert model.onset_to_isolation_times() == [-node1.symptom_onset_time]
 
     assert  model.onset_to_isolation_times(include_self_reports=False) == []
 
@@ -575,7 +594,7 @@ def test_infection_to_isolation_times():
         hh_prob_propensity_to_leave_isolation=1
     )
 
-    model.isolate_household(1)
+    model.isolate_household(model.houses.household(1))
 
     assert model.infected_to_isolation_times() == [0]
 

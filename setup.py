@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
    name='household-contact-tracing',
-   version='alpha',
+   version='0.5',
    description='Contact tracing model at the household level.',
    license="GNU",
    #long_description=long_description,
