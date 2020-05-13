@@ -540,12 +540,15 @@ def test_node_colour():
         hh_prob_propensity_to_leave_isolation=1
     )
 
-    model.G.nodes[1]["isolated"] = True
-    model.G.nodes[2]["contact_traced"] = True
+    node1 = model.nodes.node(1)
+    node1.isolated = True
+    node2 = model.nodes.node(2)
+    node2.had_contacts_traced = True
+    node3 = model.nodes.node(3)
     
-    assert model.node_colour(1) is "yellow"
-    assert model.node_colour(2) is "orange"
-    assert model.node_colour(3) is "white"
+    assert model.node_colour(node1) is "yellow"
+    assert model.node_colour(node2) is "orange"
+    assert model.node_colour(node3) is "white"
 
 def test_onset_to_isolation_times():
 
@@ -565,9 +568,10 @@ def test_onset_to_isolation_times():
         hh_prob_propensity_to_leave_isolation=1
     )
 
-    model.isolate_household(1)
+    model.isolate_household(model.houses.household(1))
+    node1 = model.nodes.node(1)
 
-    assert model.onset_to_isolation_times() == [-model.G.nodes[1]["symptom_onset"]]
+    assert model.onset_to_isolation_times() == [-node1.symptom_onset_time]
 
     assert  model.onset_to_isolation_times(include_self_reports=False) == []
 
@@ -590,7 +594,7 @@ def test_infection_to_isolation_times():
         hh_prob_propensity_to_leave_isolation=1
     )
 
-    model.isolate_household(1)
+    model.isolate_household(model.houses.household(1))
 
     assert model.infected_to_isolation_times() == [0]
 
