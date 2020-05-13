@@ -1,5 +1,6 @@
 jupyter
 matplotlib
+mypy
 networkx
 numpy
 pygraphviz
