@@ -1,5 +1,7 @@
 from multiprocessing import Pool
-import household_contact_tracing as model
+import sys
+sys.path.append("..")
+import household_contact_tracing.BranchingProcessSimulation as hct
 import pandas as pd
 import numpy.random as npr
 import itertools

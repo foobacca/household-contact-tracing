@@ -7,7 +7,9 @@ Created on Thu May  7 15:45:26 2020
 """
 
 from multiprocessing import Pool
-import household_contact_tracing as model
+import sys
+sys.path.append("../..")
+import household_contact_tracing.BranchingProcessSimulation as hct
 import pandas as pd
 import numpy.random as npr
 import pickle
