@@ -1,4 +1,6 @@
-import household_contact_tracing as hct    # The code to test
+import sys
+sys.path.append("..")
+import household_contact_tracing.BranchingProcessSimulation as hct    # The code to test
 import numpy as np
 
 # generate coverage report using:
